@@ -405,6 +405,17 @@
     "maxCandidates": 6,
     "promptMaxChars": 16000
   },
+  "discord": {
+    "enabled": false,
+    "credentialRef": "DSH_DISCORD_BOT_TOKEN",
+    "guildIds": [],
+    "channelIds": [],
+    "allowSend": false,
+    "maxReadLimit": 50,
+    "maxContentLength": 2000,
+    "requestTimeoutMs": 15000,
+    "channelCacheTtlMs": 120000
+  },
   "greetings": {
     "enabled": false,
     "morning": {
