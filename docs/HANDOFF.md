@@ -5,6 +5,36 @@
 
 ---
 
+---
+
+## 快照：2026-11-05 03:10（新增 Discord MCP，未发布）
+
+### 当前事实
+
+- **分支**：`feat/discord-mcp`（从 `main` 的 `0deb826` v0.8.8 切出）；本仓**没有 `dev` 分支**，
+  这个分支还没合并，也没动 `package.json` 版本。
+- **改动**：`4f3846e`（代码+测试+case）与其后的文档提交（RELEASE-QUEUE / HANDOFF）。
+- **测试**：`node scripts/test-audit.mjs` **144/144**（新增 `test-mcp-discord.mjs` 16 项）；
+  `node scripts/test-mcp-servers-stdio.mjs` 4/4。
+- **真机**：DSH 已热加载 `mcp__discord__*`（6 个工具）；`discord_status` 显示 bot `大肥魚`
+  （`1567605287047659521`）、token 来源 `dsh-credentials`、白名单 guild `1209805483066789908`。
+
+### 现在的 Discord 能力
+
+- `discord_status` / `discord_list_channels` / `discord_read_messages` / `discord_send_message` /
+  `discord_edit_message` / `discord_add_reaction`；配置在 `config.json` 的 `discord` 段。
+- 只走 REST，不建 gateway（不会和 `@addozhang/dsh-discord@0.6.5` 适配器抢事件流；那个适配器仍未启用）。
+- 白名单 fail-closed；`@everyone/@role` 一律压制；失败统一 `{ok:false,code,error,hint}`。
+
+### 没验证 / 下一步
+
+1. **真机发消息**没做（对外发送要用户点头）——第一次用它说话时顺手验证。
+2. 没接 gateway ⇒ 收不到 Discord 新消息的推送，只能主动读。
+3. 要合进主线：`git switch dev`（若新建）→ `git merge --no-ff feat/discord-mcp` → 再走发布流程；
+   版本建议 `0.9.0`（minor）。
+
+---
+
 ## 快照：2026-11-03 04:05（v0.8.7 正式发布）
 
 ### 当前事实

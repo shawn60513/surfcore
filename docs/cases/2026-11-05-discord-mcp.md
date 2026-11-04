@@ -81,6 +81,10 @@
 
 ## 遗留 / 后续
 
+- **QQ 会话里 Discord 工具只能被「执行期拒绝」，还没从 schema 隐藏**：`plugins/surfcore/qq-tool-restrict.mjs`
+  的 `SAFE_PREFIXES` 故意不含 `mcp__discord__`（群里任何人都不该让你替他往 Discord 发消息），
+  于是 QQ 会话里这些工具出现在清单上却一律被 guard 拒。若出现「模型反复重试被拒」，
+  要把 6 个名字加进 `KNOWN_DANGEROUS_GLOBAL_TOOLS` 那类 deny 名单并重装插件（本次没做，怕动 QQ 安全面）。
 - 没有「Discord 新消息推送」：要的话得接 gateway，会和 `dsh-discord` 适配器抢同一 token 的事件流，
   需要先确认适配器是否启用。
 - 附件只能看到元数据（文件名/大小/类型），不下载内容。

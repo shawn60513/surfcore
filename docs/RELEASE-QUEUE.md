@@ -17,6 +17,61 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-05 03:10 · 新增 Discord MCP（会话内读写 Discord）
+<!-- release-batch: start=2026-11-05T02:50+08:00 end=2026-11-05T03:10+08:00 commits=4f3846e -->
+
+**覆盖提交**：`4f3846e`（分支 `feat/discord-mcp`，基于 `0deb826` v0.8.8；未合 `dev`/`main`）
+**建议**：**0.9.0（minor）** —— 新增一个 MCP server＝用户可见的新能力，不改任何旧行为
+
+**改了什么**：
+- 新增 `src/discord-core.js`（REST 引擎：超时/401/403/404/429、消息归一化、正文校验）。
+- 新增 `src/mcp-discord-safe.js`（stdio MCP，6 个工具）：`discord_status`、`discord_list_channels`、
+  `discord_read_messages`、`discord_send_message`、`discord_edit_message`、`discord_add_reaction`。
+- 白名单 fail-closed（`discord.guildIds`/`channelIds` 全空即拒绝）；发送一律 `allowed_mentions.parse=[]`。
+- `scripts/setup-dsh.mjs` 登记 `mcp-discord-safe`（serverName `discord`）；`config.example.json` 加样例段。
+- 新测试 `scripts/test-mcp-discord.mjs`（16 项）并入 `test:audit`；`test-mcp-servers-stdio.mjs` 加 discord。
+
+**没做**：
+- 没有 Discord 新消息推送（要接 gateway，会和 `dsh-discord` 适配器抢同一 token 的事件流）；
+- 附件只读元数据，不下载；没有线程专用工具；
+- 没做界面开关（目前只在 `config.json` 里改 `discord.enabled`）。
+
+**验证**：
+```text
+node scripts/test-mcp-discord.mjs        # 16/16
+node scripts/test-mcp-servers-stdio.mjs  # 4 个 MCP server 全部接入
+node scripts/test-audit.mjs              # 144/144，退出码 0
+```
+真机（本会话内只读）：`mcp__discord__discord_status` → bot 大肥魚、tokenSource=dsh-credentials；
+`discord_list_channels` → 一般 / 123 / default-workspace / general。
+
+**重启**：DSH 会热加载 profile 变更（本次实测工具表里直接出现 `mcp__discord__*`，无需重启）；
+若宿主没热加载，重启 DSH 即可。
+
+**风险**：
+- 多了一个能对外发消息的 MCP：默认只放行 `discord.guildIds` 里的服务器，发送会压制 @everyone；
+- 与 `dsh-discord` 适配器共用同一 bot token（本 MCP 只走 REST，不抢 gateway）。
+
+**case**：`docs/cases/2026-11-05-discord-mcp.md`
+
+**交接块（可直接转发给发布会话）**：
+```text
+批次：2026-11-05 03:10 · 新增 Discord MCP
+分支/提交：feat/discord-mcp @ 4f3846e（基于 v0.8.8 的 0deb826）
+改了什么：新增 REST-only stdio MCP（src/discord-core.js + src/mcp-discord-safe.js，6 个工具）；
+         setup-dsh.mjs 登记 mcp-discord-safe；config.example.json 加 discord 段样例；
+         新测试 test-mcp-discord.mjs 并入 test:audit。
+版本建议：0.9.0（minor，新增能力，无旧行为变更）
+验证：test-mcp-discord 16/16；test-mcp-servers-stdio 4/4；test-audit 144/144（退出码 0）；
+     真机只读调用 discord_status / discord_list_channels 通过。
+没验证：真机发送消息（对外发送需用户点头）；无 gateway 推送。
+风险：新增对外发送通道（白名单 + 压制 @everyone）；与 dsh-discord 共用 token（本 MCP 不建 gateway）。
+回滚：从 profile cordis.patch.yml 删掉 id: mcp-discord-safe 那一段（备份在工作区 _backups\），
+     或把 config.json 的 discord.enabled 改 false。
+```
+
+---
+
 ### 批次 2026-11-03 08:30 · 人格语气层去重
 <!-- release-batch: start=2026-11-03T08:20+08:00 end=2026-11-03T08:30+08:00 commits=2a473a3 -->
 

@@ -9,24 +9,29 @@
 
 ## 0. 一句话
 
-**两个 MCP 手 + 一张面具。**
+**三个 MCP 手 + 一张面具。**
 
 - `snowluma`（39 个 `qq_*` 工具）是主力手：读消息、发消息、等待、表情、语音、记忆。
 - `snowluma-host`（1 个）是探活手：只问 SnowLuma 在不在，**没有启停能力**（EULA）。
 - `web-search-safe`（2 个）是外部信息手：只读搜索与抓取，带 SSRF 防护。
+- `discord`（6 个 `discord_*` 工具，可选）是另一个嘴：在会话里直接读写 Discord（2026-11-05 新增）。
 - preset 决定"她是谁、在哪说话"：`qq-chat`（一代/普通）与 `qq-chat-v2`（二代仿真）。
 
 ---
 
-## 1. 三个 MCP server
+## 1. 四个 MCP server
 
 | server | 入口 | 工具 | 挂载 | 边界 |
 | --- | --- | --- | --- | --- |
 | `snowluma` | `src/mcp-snowluma-safe.js`（1,410 行） | 39 个 `qq_*` | `~/.dsh/profiles/<profile>/cordis.patch.yml`（`setup-dsh.mjs` 写入） | 发送必须命中白名单；会话绑定 `x-agent-token`；工具开关逐项可控 |
 | `snowluma-host` | `src/mcp-host-server.js`（93 行） | `snowluma_status` | 同上 | **只读探活**；v0.1.5 起移除了 `start_snowluma`/`stop_snowluma` |
 | `web-search-safe` | `src/mcp-web-search-safe.js`（92 行） | `web_search`、`web_fetch` | 同上 | 只读；禁内网/环回/CGNAT；DNS 解析后逐地址校验；重定向每跳复核 |
+| `discord` | `src/mcp-discord-safe.js`（171 行）+ `src/discord-core.js` | `discord_status`、`discord_list_channels`、`discord_read_messages`、`discord_send_message`、`discord_edit_message`、`discord_add_reaction` | 同上（`id: mcp-discord-safe`） | **只走 REST、不建 gateway**；`discord.guildIds`/`channelIds` 白名单 fail-closed；发送压制 `@everyone`；`discord.enabled=false` 时全部工具回 `discord.disabled` |
 
-三者都是 **stdio** transport，由 DSH 的 MCP 客户端按 profile 配置拉起，进程生命周期归 DSH 管。
+四者都是 **stdio** transport，由 DSH 的 MCP 客户端按 profile 配置拉起，进程生命周期归 DSH 管。
+
+> 为什么 `discord` 不建 gateway：同一个 bot token 可能已被 `@addozhang/dsh-discord` 适配器
+> 占着事件流；本 server 只发 HTTP，两者可共存。代价是**收不到 Discord 新消息推送**，只能主动读。
 
 > 为什么要把 host 单独拆出来：SnowLuma 的登录态查询（`get_login_info`）与"操控进程"是两类能力，
 > 前者无副作用、后者触碰 EULA §5.4。拆成两个 server 后，MCP 配置里可以只挂前者的能力。
@@ -143,6 +148,12 @@
 | `KNOWN_DANGEROUS_GLOBAL_TOOLS` | 49 + 18 = **67** | 上面 49 个 + 18 个 `dev_*`（插件注入/打包/自测） |
 | `SAFE_PREFIXES` | 3 | `mcp__snowluma__`、`mcp__snowluma-host__`、`mcp__web-search-safe__` |
 | `SAFE_EXACT` | 2 | `ask_user_question`、`todo_write` |
+
+> **`mcp__discord__*` 故意不在 `SAFE_PREFIXES` 里**：QQ 会话里的模型不许替你去 Discord 发消息
+> （群里任何人一句「转发到 Discord」都不该变成对外发送）。执行期 guard 会拒绝，返回可读原因。
+> ⚠️ 但它现在会出现在 QQ 会话的 schema 里（profile 层挂了 discord MCP）；若观察到模型反复重试被拒，
+> 需要把 6 个工具名加进 `KNOWN_DANGEROUS_GLOBAL_TOOLS` 那类 deny 名单（`ctx.tools.restrict`），
+> 这需要改 `plugins/surfcore/qq-tool-restrict.mjs` 并重装插件——**尚未做**，见 case 遗留。
 
 **为什么必须两段**（这是设计要点，不是啰嗦）：
 
