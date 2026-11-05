@@ -311,6 +311,29 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
   let working = false;
   const attributor = createTurnAttributor();
 
+  async function ensureSession() {
+    if (state.sessionId && state.workspaceId) {
+      try {
+        await api.sessions.list({});
+        api.events.follow(state.sessionId);
+        return state.sessionId;
+      } catch {}
+    }
+    const dir = path.join(root, 'state', 'discord-lane-workspace');
+    fs.mkdirSync(dir, { recursive: true });
+    const ws = unwrap(await api.workspace.create({ path: dir }), 'discord lane workspace.create');
+    state.workspaceId = ws.workspace.workspaceId;
+    const created = unwrap(
+      await api.sessions.create({ workspaceId: state.workspaceId }),
+      'discord lane session.create'
+    );
+    state.sessionId = created.sessionId;
+    api.events.follow(state.sessionId);
+    save();
+    log(`Discord lane 會話已建立：${state.sessionId}`);
+    return state.sessionId;
+  }
+
   async function consumeEvents() {
     const stream = api.events.mux({});
     for await (const envelope of stream) {

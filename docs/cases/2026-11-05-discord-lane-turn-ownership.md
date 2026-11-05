@@ -59,3 +59,12 @@
 - `test-release-manifest.mjs` 需要每次改檔後 `node scripts/release-manifest.mjs` 重新生成並提交。
 - 可考慮把 `dsh-speak-up` 的念頭注入挪出這個 session，避免念頭污染聊天上下文（本次未改）。
 - 附件仍只讀元數據，不支援下載。
+
+## 補記：首次上線後重啟翻車（15:00）
+
+- 現象：kill 舊 bridge、detached 起新進程後，日誌出現
+  `15:00:08 [bridge] Discord lane 初始化失敗：ensureSession is not defined`，lane 整個沒啟動。
+- 根因：重寫 `discord-lane.js` 的區間（`let waiting = null;` → `/** 把新訊息包成一次 turn…`）時，把夾在中間的 `async function ensureSession()` 一起換掉了；它沒有被新程式碼覆蓋，屬純誤刪。
+- 修法：把 `ensureSession()` 原樣插回 `async function consumeEvents()` 之前（行為不變：有 session 就 `sessions.list` + `events.follow`，沒有就建 workspace/session 並存檔）。
+- 驗證：`node --check` + `node scripts/test-discord-lane.mjs` 7/7；重啟後日誌 `15:01:01 Discord lane 啟動`，無初始化失敗；`15:02:09 Discord lane：回了 上午不順 一句`（真機 DM 回覆成功，代表回合歸屬已生效）。
+- 教訓：這類「整段替換」的補丁要先把被替換區間裡的**全部頂層宣告**列一遍，對照新片段再落筆；重啟後的日誌檢查比單元測試更早抓到它。
