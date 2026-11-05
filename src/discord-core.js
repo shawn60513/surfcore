@@ -204,7 +204,7 @@ export function sanitizeMessageContent(text, maxLength = 2000) {
   return cleaned;
 }
 
-const TEXT_CHANNEL_TYPES = new Set([0, 5, 15, 16]); // 文本 / 公告 / 公告子区 / 论坛
+const TEXT_CHANNEL_TYPES = new Set([0, 5, 10, 11, 12, 15, 16]); // 文本 / 公告 / 公告子区(10) / 公开子区(11) / 私密子区(12) / 论坛
 
 /**
  * 建一个 Discord 客户端：频道解析 + 白名单校验 + 常用动作。

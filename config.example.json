@@ -414,7 +414,16 @@
     "maxReadLimit": 50,
     "maxContentLength": 2000,
     "requestTimeoutMs": 15000,
-    "channelCacheTtlMs": 120000
+    "channelCacheTtlMs": 120000,
+    "lane": {
+      "enabled": false,
+      "userId": "",
+      "pollMs": 60000,
+      "idleMinutes": 120,
+      "quietStart": 23,
+      "quietEnd": 8,
+      "proactive": true
+    }
   },
   "greetings": {
     "enabled": false,

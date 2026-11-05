@@ -17,6 +17,31 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-05 15:05 · Discord 私訊 lane 上線 + 回合歸屬修正
+<!-- release-batch: start=2026-11-05T14:45+08:00 end=2026-11-05T15:05+08:00 commits=TBD -->
+
+**覆蓋提交**：`TBD`（分支 `feat/discord-mcp`，基於 `01d030f`）
+**建議**：**0.9.0（minor）** —— 與上一個 Discord MCP 批次一起發；新增「私訊聊天 + 主動開口」能力
+
+**改了什么**：
+- 新增 `src/discord-lane.js`：輪詢 Discord 私訊 → 進專屬 DSH 會話跑一輪 → 貼回 DM；閒置且不在安靜時段會主動開口。
+- 新增 `scripts/discord-probe.mjs`（只讀探測）與 `docs/DISCORD-DM-LANE.md`。
+- `src/bridge.js` 在 `discord.lane.enabled` 為 true 時啟動 lane（與 QQ 同一個常駐進程）。
+- **修正**：lane 只認「自己發起的回合」（比對 prompt 正文 + turn 開始時間），其他插件注入的回合不再被誤抓。
+- **修正**：水位改成「送出成功才推進」，模型/網路失敗下一輪重試，不再永久丟訊息。
+- 新測試 `scripts/test-discord-lane.mjs`（7 組）並入 `test:audit`；case：`docs/cases/2026-11-05-discord-lane-turn-ownership.md`。
+- 順手：`discord-core.js` 的 `TEXT_CHANNEL_TYPES` 補 10/11/12，子區（thread）可讀。
+- 重新生成 `release/install-manifest.json`（修復 `01d030f` 遺留的清單與 blob 不一致）。
+
+**沒做**：
+- 仍只走 REST 輪詢（預設 60s），沒有 gateway 即時推送；
+- 沒把 `dsh-speak-up` 的念頭注入挪出 lane 的 session（只做到「不誤抓」）；
+- 附件仍只讀元數據。
+
+**回滾**：`git revert` 本批提交；或把 `config.json` 的 `discord.lane.enabled` 改回 `false`（lane 不啟動，QQ 不受影響）。
+
+**生效**：改的是常駐進程，需重啟 `bridge.js`（QQ + Discord lane 共用同一個進程）。
+
 ### 批次 2026-11-05 03:10 · 新增 Discord MCP（会话内读写 Discord）
 <!-- release-batch: start=2026-11-05T02:50+08:00 end=2026-11-05T03:10+08:00 commits=4f3846e -->
 

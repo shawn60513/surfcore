@@ -894,6 +894,8 @@ function loadConfig() {
     // 管理员身份（QQ ⇄ B站 同一个人）的投影：由合体插件在保存时写入；
     // 旧配置没有这一段时 adminFromQqConfig 会回退到 ownerQQ。
     admin: file.admin && typeof file.admin === 'object' && !Array.isArray(file.admin) ? file.admin : null,
+    // Discord 私訊 lane 的設定原樣帶過來（lane 自己解析白名單與 token，bridge 只決定要不要啟動）。
+    discord: file.discord && typeof file.discord === 'object' && !Array.isArray(file.discord) ? file.discord : null,
     allow: {
       private: normalizeIdList(file.allow?.private ?? file.allow?.privates ?? []),
       groups: normalizeIdList(file.allow?.groups ?? file.allow?.group ?? [])
@@ -3222,6 +3224,15 @@ async function main() {
     // 默认只允许把 launch token 交给回环地址；远程 DSH 需要显式 opt-in（见 dsh-client.ensureAuth）。
     allowRemote: cfg.dsh.allowRemote === true
   });
+  // ── Discord 私訊 lane ──────────────────────────────────────────────────
+  // 跟在 QQ 同一個 24/7 進程裡跑，共用 config.json；但它自己開 DSH 會話、
+  // 自己存歷史（state/discord-lane.json），不碰 QQ 的 key / 唤醒 / 收尾。
+  // 預設關閉：config.json 的 discord.lane.enabled 必須是 true 才啟動。
+  if (cfg.discord?.lane?.enabled === true) {
+    import('./discord-lane.js')
+      .then(({ createDiscordLane }) => createDiscordLane({ root: ROOT, cfg, log }).start())
+      .catch((error) => log(`Discord lane 啟動失敗：${error?.message ?? error}`));
+  }
   // DSH 的模型目录 RPC：0.1.5 是 `session/modelCatalog`。**不能走基类门面**
   // `api.sessions.modelCatalog` —— 桥接钉住的 `@deepseek-ai/dsh-host-apiproxy@0.1.1-rc.2`
   // 的 sessions 门面里根本没有这个方法（只有 `models` → 已下线的 `session/models`），
