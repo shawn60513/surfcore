@@ -6,7 +6,10 @@
 // 用户那边的表现是「干话有回、但这句话永远送不到 Discord」。
 // 这里的每个用例都对应真实事件顺序（见 docs/cases/2026-11-05-discord-lane-turn-ownership.md）。
 import assert from 'node:assert/strict';
-import { createTurnAttributor, isPromptMessage, samePromptText } from '../src/discord-lane.js';
+import fsx from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createTurnAttributor, isPromptMessage, readMemoryBrief, samePromptText } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -85,4 +88,32 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   a.onTurnStart(40, T0 + 10, PROMPT);
   assert.equal(a.onUserMessage(withImage, PROMPT, T0), 40, "帶圖那輪要歸到自己頭上");
 }
-console.log('test-discord-lane: 8 组断言通过');
+
+// 9) 記憶卡摘要：只取「三｜對方是誰」「五｜我們的約定」，其餘章節不要；讀不到就當沒有。
+{
+  const dir = fsx.mkdtempSync(path.join(os.tmpdir(), "lane-memory-"));
+  const card = path.join(dir, "记忆卡.md");
+  const nl = String.fromCharCode(10);
+  fsx.writeFileSync(card, [
+    "## 一｜我是谁",
+    "我叫爱弥丝。",
+    "## 三｜对方是谁",
+    "- 他叫「上午不顺」。",
+    "- 爱吃义大利麵。",
+    "## 四｜我们怎么走到今天的",
+    "- 这条不该出现。",
+    "## 五｜我们的约定",
+    "- 睡得晚要说晚安。",
+  ].join(nl), "utf8");
+  const brief = readMemoryBrief(card);
+  assert.equal(brief.includes("上午不顺"), true);
+  assert.equal(brief.includes("义大利麵"), true);
+  assert.equal(brief.includes("晚安"), true);
+  assert.equal(brief.includes("不该出现"), false, "第四章不该混进来");
+  assert.equal(brief.includes("我叫爱弥丝"), false, "第一章不该混进来");
+  assert.equal(readMemoryBrief(path.join(dir, "没有这个文件.md")), "");
+  assert.equal(readMemoryBrief(""), "");
+  fsx.rmSync(dir, { recursive: true, force: true });
+}
+
+console.log('test-discord-lane: 9 组断言通过');

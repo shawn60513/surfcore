@@ -17,6 +17,19 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-06 01:55 · Discord lane 每輪帶記憶卡摘要
+
+- 覆盖提交：本批提交（feat: lane 讀星汐記憶卡）
+- 建议版本：**0.9.1 patch**
+- 改了：
+  - `src/discord-lane.js`：新增导出 `readMemoryBrief(file, limit=300)`（只取「三｜对方是谁」「五｜我们的约定」，去 `- ` 前缀、`；` 连接、超 300 字截断）；`replyPrompt()` / `proactivePrompt()` 插一行 `（你記得的事：…）`；启动日志 `記憶卡已載入（N 字）` / `記憶卡讀不到內容（路径）`
+  - `config.json` / `config.example.json`：`discord.lane.memoryCard`（真机指 `~/.dsh/xingxi/会话/爱弥丝/记忆卡.md`；示例留空 = 不读）
+  - `scripts/test-discord-lane.mjs`：第 9 组断言（只取两章、不混入其他章、文件不存在返回空串）
+- case：`docs/cases/2026-11-06-lane-memory-card.md`
+- 验证：`test-discord-lane` 9 组、`test-audit` 147/147；真机 `01:46:05 Discord lane：記憶卡已載入（164 字）`
+- 配套（不在仓内）：`~/.dsh/xingxi/会话/爱弥丝/` 建 `记忆卡.md` + `日记/`（旧角色 23 条记忆迁入）；`~/.dsh/xingxi/config.json` 绑定 lane 会话与主会话；`~/.dsh/fish-memory-config.json` 把 lane 会话设 false
+- 回滚：删掉 `memoryCard` 配置即恢复原样（代码不读文件就无副作用）
+
 ### 批次 2026-11-06 01:45 · Discord lane 人設搬到工作區指示
 
 - 覆盖提交：本批提交（feat: lane 人設改由 AGENTS.md 注入）

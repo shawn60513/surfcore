@@ -220,6 +220,56 @@ function syncWorkspaceInstructions(root) {
   return file;
 }
 
+const MEMORY_BRIEF_LIMIT = 300;
+const MEMORY_BRIEF_CHAPTERS = new Set(['三', '五']);
+
+/**
+ * 從星汐記憶卡裡取一段「記得的事」：只要「對方是誰」「我們的約定」兩章，
+ * 壓成 300 字以內的一行，跟著每一輪 prompt 走。讀不到就當沒有。
+ */
+export function readMemoryBrief(file, limit = MEMORY_BRIEF_LIMIT) {
+  if (!file) return '';
+  let md = "";
+  try {
+    md = fs.readFileSync(file, 'utf8');
+  } catch {
+    return '';
+  }
+  const parts = [];
+  let take = false;
+  const lines = md.split(String.fromCharCode(10)).map((l) => l.split(String.fromCharCode(13)).join(""));
+  for (const line of lines) {
+    const num = chapterNumber(line);
+    if (num) {
+      take = MEMORY_BRIEF_CHAPTERS.has(num);
+      continue;
+    }
+    if (!take) continue;
+    const t = stripBullet(line);
+    if (t) parts.push(t);
+  }
+  const text = parts.join('；');
+  if (!text) return '';
+  return text.length > limit ? text.slice(0, limit) + '…' : text;
+}
+
+function chapterNumber(line) {
+  if (!line.startsWith('##')) return '';
+  const rest = line.slice(2).trim();
+  if (rest.startsWith('#')) return '';
+  const num = rest.slice(0, 1);
+  const sep = rest.slice(1, 2).trim();
+  if (!'一二三四五六七八'.includes(num)) return '';
+  if (!'、.｜|·:：-—'.includes(sep)) return '';
+  return num;
+}
+
+function stripBullet(line) {
+  let t = line.trim();
+  if (t.startsWith('- ') || t.startsWith('* ')) t = t.slice(2).trim();
+  return t;
+}
+
 // ── 主體 ──────────────────────────────────────────────────────────────────
 
 export function createDiscordLane({ root, cfg, log = console.log, once = false } = {}) {
@@ -231,6 +281,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
   const idleMinutes = clampMs(laneCfg.idleMinutes, DEFAULT_IDLE_MINUTES, 5, 24 * 60);
   const quiet = { start: laneCfg.quietStart ?? 23, end: laneCfg.quietEnd ?? 8 };
   const proactiveEnabled = laneCfg.proactive !== false;
+  const memoryCard = String(laneCfg.memoryCard ?? '').trim();
 
   const state = {
     version: LANE_VERSION,
@@ -506,8 +557,11 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     const log2 = history()
       .map((m) => `${m.role === 'user' ? '對方' : '你'}：${m.content}`)
       .join('\n');
+    const remember = readMemoryBrief(memoryCard);
     return [
       '（Discord 私訊）直接給聊天內容，不要解釋你在做什麼。',
+      '',
+      remember ? `（你記得的事：${remember}）` : '',
       '',
       log2 ? `最近的對話：\n${log2}` : '',
       '',
@@ -521,10 +575,13 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     const last = history().slice(-6)
       .map((m) => `${m.role === 'user' ? '對方' : '你'}：${m.content}`)
       .join('\n');
+    const remember = readMemoryBrief(memoryCard);
     return [
       '（Discord 私訊）你剛好在想對方，想主動私訊找他講一句話。',
       '給一句自然的開場（1–2 句），可以延續最近聊過的事，也可以只是想到他。',
       '如果現在完全不適合開口，就只回一個字：跳過。',
+      '',
+      remember ? `（你記得的事：${remember}）` : '',
       '',
       last ? `最近的對話：\n${last}` : '你們還沒聊過。',
     ]
@@ -673,6 +730,10 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       }
       process.once('exit', release);
       log(`Discord lane 啟動：user=${userId} poll=${pollMs}ms idle=${idleMinutes}min token=${source}`);
+      if (memoryCard) {
+        const brief = readMemoryBrief(memoryCard);
+        log(brief ? `Discord lane：記憶卡已載入（${brief.length} 字）` : `Discord lane：記憶卡讀不到內容（${memoryCard}）`);
+      }
       try {
         const baseUrl = await resolveBaseUrl();
         ensureApi(baseUrl);

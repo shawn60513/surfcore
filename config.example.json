@@ -422,7 +422,8 @@
       "idleMinutes": 120,
       "quietStart": 23,
       "quietEnd": 8,
-      "proactive": true
+      "proactive": true,
+      "memoryCard": ""
     },
     "mentionUsers": [],
     "pingOnReply": true,
