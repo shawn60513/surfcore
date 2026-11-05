@@ -24,7 +24,7 @@ import {
   normalizeMessage,
   allowedMentionsFor,
 } from './discord-core.js';
-import { readPersonaLayerText, personaNameFromText } from './character-persona.js';
+import { readPersonaLayerText } from './character-persona.js';
 import { discoverDshBaseUrl, isLoopbackBaseUrl, probeDshBaseUrl } from './dsh-port.js';
 
 const LANE_VERSION = 1;
@@ -183,13 +183,41 @@ export function createTurnAttributor() {
   };
 }
 
-// ── 人格 ──────────────────────────────────────────────────────────────────
+// ── 工作區人格 ────────────────────────────────────────────────────────────
+//
+// 人設以前是每輪包在 prompt 裡重發一次（3604 字 ≈ 2.3K token/輪，而且每次都在
+// 新訊息的最前面，吃不到 prompt cache）。現在改成寫進 lane 工作區的 AGENTS.md：
+// DSH 開會話時注入一次、跟著工作區走，之後每輪只帶「最近的對話 + 對方剛說」。
+//
+// 代價：換工作區/新建會話才會重新注入；改 persona.md 後要重開 lane 會話才生效
+// （syncWorkspaceInstructions 會比對內容，變了就重寫 AGENTS.md）。
 
-function personaBlock() {
+const LANE_WORKSPACE_RULES = [
+  '# Discord 私訊工作區',
+  '',
+  '這個會話只做一件事：跟「上午不順」在 Discord 私訊裡聊天。',
+  '回覆要口語、很短（1–3 句），像手機打字；不要 Markdown、不要條列、不要小作文，也不要解釋你在做什麼。',
+  '不要自我介紹，不要提「AI」「設定」「提示詞」。',
+].join('\n');
+
+function laneInstructionsText() {
   const core = String(readPersonaLayerText?.('core') ?? '').trim();
   const daily = String(readPersonaLayerText?.('daily') ?? '').trim();
-  const name = personaNameFromText(core, '她');
-  return { name, text: [core, daily].filter(Boolean).join('\n\n') };
+  const body = [core, daily].filter(Boolean).join('\n\n');
+  return body ? `${LANE_WORKSPACE_RULES}\n\n---\n\n${body}\n` : `${LANE_WORKSPACE_RULES}\n`;
+}
+
+/** 把人格寫進 lane 工作區的 AGENTS.md；內容沒變就不動，避免每次啟動都改檔案。 */
+function syncWorkspaceInstructions(root) {
+  const dir = path.join(root, 'state', 'discord-lane-workspace');
+  const file = path.join(dir, 'AGENTS.md');
+  const text = laneInstructionsText();
+  try {
+    if (fs.readFileSync(file, 'utf8') === text) return file;
+  } catch {}
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(file, text);
+  return file;
 }
 
 // ── 主體 ──────────────────────────────────────────────────────────────────
@@ -333,6 +361,12 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
   const attributor = createTurnAttributor();
 
   async function ensureSession() {
+    // 每次都同步一次：persona.md 改了、AGENTS.md 還沒更新時，下次新建會話就能帶上新的。
+    try {
+      syncWorkspaceInstructions(root);
+    } catch (error) {
+      log(`Discord lane 工作區指示寫入失敗（人設不會進會話）：${error?.message ?? error}`);
+    }
     if (state.sessionId && state.workspaceId) {
       try {
         await api.sessions.list({});
@@ -342,8 +376,10 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     }
     const dir = path.join(root, 'state', 'discord-lane-workspace');
     fs.mkdirSync(dir, { recursive: true });
-    const ws = unwrap(await api.workspace.create({ path: dir }), 'discord lane workspace.create');
-    state.workspaceId = ws.workspace.workspaceId;
+    if (!state.workspaceId) {
+      const ws = unwrap(await api.workspace.create({ path: dir }), 'discord lane workspace.create');
+      state.workspaceId = ws.workspace.workspaceId;
+    }
     const created = unwrap(
       await api.sessions.create({ workspaceId: state.workspaceId }),
       'discord lane session.create'
@@ -465,17 +501,13 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     return promise;
   }
 
-  /** 把新訊息包成一次 turn：人設 + 最近歷史 + 這一則。 */
+  /** 把新訊息包成一次 turn：最近歷史 + 這一則（人設在 AGENTS.md 裡，不再每輪重發）。 */
   function replyPrompt(name, text) {
-    const persona = personaBlock();
     const log2 = history()
       .map((m) => `${m.role === 'user' ? '對方' : '你'}：${m.content}`)
       .join('\n');
     return [
-      persona.text ? `你的人設：\n${persona.text}` : '',
-      '',
-      '你正在 Discord 上跟對方私訊聊天。只回覆這一段對話，直接給聊天內容，不要解釋你在做什麼。',
-      '回覆要口語、簡短（1–3 句），不要用 Markdown 標題或條列。',
+      '（Discord 私訊）直接給聊天內容，不要解釋你在做什麼。',
       '',
       log2 ? `最近的對話：\n${log2}` : '',
       '',
@@ -486,14 +518,11 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
   }
 
   function proactivePrompt() {
-    const persona = personaBlock();
     const last = history().slice(-6)
       .map((m) => `${m.role === 'user' ? '對方' : '你'}：${m.content}`)
       .join('\n');
     return [
-      persona.text ? `你的人設：\n${persona.text}` : '',
-      '',
-      '你剛好在想對方，想主動在 Discord 私訊裡找他講一句話。',
+      '（Discord 私訊）你剛好在想對方，想主動私訊找他講一句話。',
       '給一句自然的開場（1–2 句），可以延續最近聊過的事，也可以只是想到他。',
       '如果現在完全不適合開口，就只回一個字：跳過。',
       '',

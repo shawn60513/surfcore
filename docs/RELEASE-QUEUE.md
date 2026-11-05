@@ -17,6 +17,17 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-06 01:45 · Discord lane 人設搬到工作區指示
+
+- 覆盖提交：本批提交（feat: lane 人設改由 AGENTS.md 注入）
+- 建议版本：**0.9.1 patch**
+- 改了：
+  - `src/discord-lane.js`：新增 `syncWorkspaceInstructions()` / `LANE_WORKSPACE_RULES` / `laneInstructionsText()`；`ensureSession()` 先写 `state/discord-lane-workspace/AGENTS.md` 再开会话；`replyPrompt()` / `proactivePrompt()` 不再拼人設；`workspaceId` 存在时不再重复 `workspace.create`
+  - 行为：人設（3,604 字）+ Discord 说话规则只在会话开始注入一次，进缓存前缀；每轮只带最近 24 条历史 + 这一则
+- case：`docs/cases/2026-11-06-lane-persona-to-agents.md`
+- 验证：`test-discord-lane` 8 组、`test-audit` 147/147；probe 会话事件流里命中「Discord 私訊工作區」→ 工作區指示确实注入
+- 回滚：`git revert` 本批；lane 需换新会话才生效，旧会话记录不受影响
+
 ### 批次 2026-11-06 01:20 · Discord 圖片（看得到 / 不再重複）
 
 - 覆盖提交：`bb6b374`（feat: 图片支持 + 重复修复，同一批）
