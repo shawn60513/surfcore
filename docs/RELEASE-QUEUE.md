@@ -17,6 +17,40 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-05 15:50 · 新增 B站 safe MCP（看关注 / 看 @）
+
+**覆盖提交**：本次提交（分支 `feat/discord-mcp`）
+**建议**：**0.9.0（minor）** —— 与两个 Discord 批次一起发；新增一个只读 MCP server
+
+**改了什么**：
+- 新增 `src/bili-core.js`（官方 web 接口引擎：超时 / 状态码 / `code != 0` 映射 / 凭证缺失降级）。
+- 新增 `src/mcp-bili-safe.js`（stdio MCP，4 个工具）：`bili_account`、`bili_followings`、
+  `bili_mentions`（at / reply / like）、`bili_follow`（默认被 `bili.allowFollow` 挡住）。
+- 每次调用现读凭证（`~/.dsh/bili-duty/bili_credential.json`），重新扫码不用重启 DSH。
+- `scripts/setup-dsh.mjs` 登记 `mcp-bili-safe`（serverName `bili-safe`）；`config.example.json` 加样例段。
+- 新测试 `scripts/test-bili-safe.mjs`（16 项）并入 `test:audit`；`test-mcp-servers-stdio.mjs` 加 bili-safe。
+
+**没做**：
+- 私信（DM）与动态流没接；
+- 关注列表只拉一页（上限 100），没做全量翻页；
+- `allowFollow` 保持 `false`，没有替用户做过任何关注/取关。
+
+**验证**：
+```text
+node scripts/test-bili-safe.mjs          # 16/16
+node scripts/test-mcp-servers-stdio.mjs  # 5 个 MCP server 全部接入
+node scripts/test-audit.mjs              # 146/146，退出码 0
+```
+真机：`bili_account` → 舜的大肥魚 / uid 3747579670040322；`bili_followings` → total 0；
+`bili_mentions(at)` → total 1（uid 23388718，一条设定图动态）。
+
+**重启**：DSH 热加载即可（本次实测工具表直接出现 `mcp__bili-safe__*`）。
+
+**回滚**：删掉 `config.json` 的 `bili` 段或把 `bili.enabled` 改 `false`（工具会回 `bili.disabled`）；
+彻底移除则 `git revert` 本批提交并跑一次 `setup:dsh`。
+
+**case**：`docs/cases/2026-11-05-bili-safe-mcp.md`
+
 ### 批次 2026-11-05 15:05 · Discord 私訊 lane 上線 + 回合歸屬修正
 <!-- release-batch: start=2026-11-05T14:45+08:00 end=2026-11-05T15:05+08:00 commits=5e28ac1,114f5ae,583cc2a,187211f -->
 

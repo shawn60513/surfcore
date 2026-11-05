@@ -432,5 +432,12 @@
       "uin": null,
       "name": ""
     }
+  },
+  "bili": {
+    "enabled": false,
+    "credentialPath": "",
+    "allowFollow": false,
+    "requestTimeoutMs": 15000,
+    "maxItems": 30
   }
 }

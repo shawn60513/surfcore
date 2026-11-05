@@ -9,17 +9,18 @@
 
 ## 0. 一句话
 
-**三个 MCP 手 + 一张面具。**
+**五只 MCP 手 + 一张面具。**
 
 - `snowluma`（39 个 `qq_*` 工具）是主力手：读消息、发消息、等待、表情、语音、记忆。
 - `snowluma-host`（1 个）是探活手：只问 SnowLuma 在不在，**没有启停能力**（EULA）。
 - `web-search-safe`（2 个）是外部信息手：只读搜索与抓取，带 SSRF 防护。
 - `discord`（6 个 `discord_*` 工具，可选）是另一个嘴：在会话里直接读写 Discord（2026-11-05 新增）。
+- `bili-safe`（4 个 `bili_*` 工具，可选）是 B站 眼睛：看账号、关注列表、谁 @ 了我（2026-11-05 新增）。
 - preset 决定"她是谁、在哪说话"：`qq-chat`（一代/普通）与 `qq-chat-v2`（二代仿真）。
 
 ---
 
-## 1. 四个 MCP server
+## 1. 五个 MCP server
 
 | server | 入口 | 工具 | 挂载 | 边界 |
 | --- | --- | --- | --- | --- |
@@ -27,8 +28,9 @@
 | `snowluma-host` | `src/mcp-host-server.js`（93 行） | `snowluma_status` | 同上 | **只读探活**；v0.1.5 起移除了 `start_snowluma`/`stop_snowluma` |
 | `web-search-safe` | `src/mcp-web-search-safe.js`（92 行） | `web_search`、`web_fetch` | 同上 | 只读；禁内网/环回/CGNAT；DNS 解析后逐地址校验；重定向每跳复核 |
 | `discord` | `src/mcp-discord-safe.js`（171 行）+ `src/discord-core.js` | `discord_status`、`discord_list_channels`、`discord_read_messages`、`discord_send_message`、`discord_edit_message`、`discord_add_reaction` | 同上（`id: mcp-discord-safe`） | **只走 REST、不建 gateway**；`discord.guildIds`/`channelIds` 白名单 fail-closed；发送压制 `@everyone`；`discord.enabled=false` 时全部工具回 `discord.disabled` |
+| `bili-safe` | `src/mcp-bili-safe.js`（约 130 行）+ `src/bili-core.js` | `bili_account`、`bili_followings`、`bili_mentions`、`bili_follow` | 同上（`id: mcp-bili-safe`） | 只读为主；关注/取关是**对外动作**，默认被 `bili.allowFollow=false` 挡住；凭证每次现读（重扫码不用重启）；`bili.enabled=false` 时全部工具回 `bili.disabled` |
 
-四者都是 **stdio** transport，由 DSH 的 MCP 客户端按 profile 配置拉起，进程生命周期归 DSH 管。
+五者都是 **stdio** transport，由 DSH 的 MCP 客户端按 profile 配置拉起，进程生命周期归 DSH 管。
 
 > 为什么 `discord` 不建 gateway：同一个 bot token 可能已被 `@addozhang/dsh-discord` 适配器
 > 占着事件流；本 server 只发 HTTP，两者可共存。代价是**收不到 Discord 新消息推送**，只能主动读。
@@ -154,6 +156,9 @@
 > ⚠️ 但它现在会出现在 QQ 会话的 schema 里（profile 层挂了 discord MCP）；若观察到模型反复重试被拒，
 > 需要把 6 个工具名加进 `KNOWN_DANGEROUS_GLOBAL_TOOLS` 那类 deny 名单（`ctx.tools.restrict`），
 > 这需要改 `plugins/surfcore/qq-tool-restrict.mjs` 并重装插件——**尚未做**，见 case 遗留。
+>
+> 同理 **`mcp__bili-safe__*` 也不在 `SAFE_PREFIXES` 里**：QQ 群里不许模型替她去 B站 关注人。
+> 只读的 `bili_account`/`bili_followings`/`bili_mentions` 若要在 QQ 侧放行，再把这三个名字单独加白。
 
 **为什么必须两段**（这是设计要点，不是啰嗦）：
 

@@ -7,6 +7,34 @@
 
 ---
 
+## 快照：2026-11-05 15:50（Discord 私訊 lane + 回合歸屬修正 + B站 safe MCP，未发布）
+
+### 当前事实
+
+- **分支**：`feat/discord-mcp`（基于 `main` v0.8.8 `0deb826`），仍未合并；本仓没有 `dev` 分支。
+- **本批提交**：`5e28ac1` lane 上线与回合归属修正、`114f5ae` 文档、`583cc2a` 重新生成 install-manifest，
+  以及本次的 bili-safe MCP 提交。
+- **测试**：`node scripts/test-audit.mjs` **146/146**；`node scripts/test-mcp-servers-stdio.mjs` 5 个 server 全过。
+- **运行态**：`bridge.js` 常驻（PID 39028 起，含 QQ + Discord DM lane）；lane 配置
+  `discord.lane = {idleMinutes: 30, pollMs: 60000, proactive: true}`，日志有 `Discord lane 啟動 … idle=30min`。
+- **B站**：`mcp__bili-safe__*` 已热加载；账号 `舜的大肥魚`（uid `3747579670040322`），关注数 0，
+  `@我` 1 条（uid `23388718`）；`bili.allowFollow=false`。
+
+### 这次改了什么（要点）
+
+1. `src/discord-lane.js`：新增 `createTurnAttributor()`，只认「自己发起的那一轮」
+   （prompt 正文 + turn 开始时间双重比对）；水位改成送出成功才推进；空正文不再静默跳过。
+2. `src/discord-core.js`：`TEXT_CHANNEL_TYPES` 补 10/11/12，thread 可读。
+3. 新增 `src/bili-core.js` + `src/mcp-bili-safe.js`：4 个工具看账号 / 关注列表 / @我 / 关注。
+   对外动作 fail-closed（`bili.allowFollow` 默认 false）。
+4. 两个 MCP 都登记进 `scripts/setup-dsh.mjs` 与 profile 的 `cordis.patch.yml`，下次 setup 不会被抹。
+
+### 没验证 / 下一步
+
+- 真机「发 Discord 消息」「关注 B站 用户」都没执行（对外动作，需用户点头）。
+- lane 仍只走 REST 轮询，没有 gateway 推送；`dsh-speak-up` 的念头注入仍在同一个 session 里（只做到不误抓）。
+- 待用户给 B站 UID 后，可把 `bili.allowFollow` 临时打开做一次关注验证。
+
 ## 快照：2026-11-05 03:10（新增 Discord MCP，未发布）
 
 ### 当前事实
