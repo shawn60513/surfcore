@@ -19,7 +19,7 @@
 
 ### 批次 2026-11-05 17:05 · B站 评论区 @ 人（bili_reply）
 
-- 覆盖提交：待回填（本次提交后由同一会话补上）
+- 覆盖提交：`1b90117`（feat: bili_reply）
 - 功能：新增 MCP 工具 `bili_reply` —— 在视频下发评论 / 回复评论，传 `mentionUid` 会自动把 `@昵称` 补到正文最前（B站 靠纯文本昵称触发通知）；`bili.allowComment` 默认 false，显式打开才允许对外发言。
 - 文件：`src/bili-core.js`（sanitizeComment / userName / resolveAid / comment）、`src/mcp-bili-safe.js`（bili_reply）、`scripts/test-bili-safe.mjs`（+6 项断言）、`config.example.json`（allowComment:false）。
 - case：`docs/cases/2026-11-05-bili-reply-mention.md`
