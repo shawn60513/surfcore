@@ -19,7 +19,7 @@
 
 ### 批次 2026-11-06 02:20 · 星汐绑定守卫（记忆别再混）
 
-- 覆盖提交：<待回填>
+- 覆盖提交：`2a33426`（+ `d07bd15` 清單重生成）
 - 建议版本：**0.9.1 patch**（只加防护，不改既有行为）
 - 改动：
   - `src/lane-memory.js`：新增 `foreignBindings()` / `pruneForeignBindings()`（路径归一化 + 摘除前备份）；`shouldConsolidate()` 支持 `hour < 0` 关闭。
