@@ -19,7 +19,7 @@
 
 ### 批次 2026-11-06 01:20 · Discord 圖片（看得到 / 不再重複）
 
-- 覆盖提交：`fe82f01`（feat: 图片支持 + 重复修复，同一批）
+- 覆盖提交：`bb6b374`（feat: 图片支持 + 重复修复，同一批）
 - 建议版本：**0.9.1 patch**
 - 改了：
   - `src/discord-core.js` `normalizeMessage()` 带出 `attachments`（id/filename/contentType/size/url）
