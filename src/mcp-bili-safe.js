@@ -140,4 +140,22 @@ server.tool(
     })
 );
 
+server.tool(
+  'bili_reply',
+  '在 B站 视频下发评论，或回复某条评论（对外动作）。传 mentionUid 会自动在正文前加 @对方昵称 —— B站 靠这个发通知。默认被 bili.allowComment 挡着。',
+  {
+    bvid: z.string().optional().describe('视频 BV 号（BV 开头）'),
+    aid: z.string().optional().describe('视频 aid（数字；和 bvid 二选一）'),
+    message: z.string().describe('评论正文（最多 1000 字；别手打 @，用 mentionUid）'),
+    mentionUid: z.string().optional().describe('要 @ 的人的 B站 UID（自动查昵称并加到正文最前）'),
+    root: z.string().optional().describe('回复楼中楼时的根评论 rpid（回复一级评论不用填）'),
+    parent: z.string().optional().describe('要回复的那条评论 rpid（0/不填 = 发新评论）'),
+  },
+  async ({ bvid, aid, message, mentionUid, root, parent }) =>
+    run(async () => {
+      const { client: api } = client();
+      return api.comment({ bvid, aid, message, mentionUid, root, parent });
+    })
+);
+
 await server.connect(new StdioServerTransport());

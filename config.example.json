@@ -441,6 +441,7 @@
     "credentialPath": "",
     "allowFollow": false,
     "requestTimeoutMs": 15000,
-    "maxItems": 30
+    "maxItems": 30,
+    "allowComment": false
   }
 }

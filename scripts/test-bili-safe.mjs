@@ -164,7 +164,41 @@ const baseCfg = { enabled: true, allowFollow: false, requestTimeoutMs: 5000, max
   check('code=-101 映射成 bili.api--101 且带 hint', payload.code === 'bili.api--101' && Boolean(payload.hint), JSON.stringify(payload));
 }
 
-// ── 9. stdio 接入 ──────────────────────────────────────────────
+// ── 9. 评论 / @ ────────────────────────────────────────────────
+{
+  const api = createBiliClient({ cred, cfg: baseCfg, fetchImpl: fakeFetch(() => ({ json: { code: 0 } })) });
+  let payload = {};
+  try { await api.comment({ bvid: 'BV1xx411c7mD', message: '你好' }); } catch (e) { payload = toErrorPayload(e); }
+  check('allowComment 未开时拒绝发评论', payload.code === 'bili.comment-disabled', JSON.stringify(payload));
+
+  const fetchImpl = fakeFetch(({ url }) => {
+    if (url.includes('/x/web-interface/view')) return { json: { code: 0, data: { aid: 123456 } } };
+    if (url.includes('/x/web-interface/card')) return { json: { code: 0, data: { card: { name: '琥珀之梟' } } } };
+    if (url.includes('/x/v2/reply/add')) return { json: { code: 0, data: { rpid_str: '999', rpid: 999 } } };
+    return { json: { code: 0 } };
+  });
+  const api2 = createBiliClient({ cred, cfg: { ...baseCfg, allowComment: true }, fetchImpl });
+  const out = await api2.comment({ bvid: 'BV1xx411c7mD', message: '來看這個', mentionUid: '23388718' });
+  const post = fetchImpl.calls.find((c) => c.url.includes('/x/v2/reply/add'));
+  const body = new URLSearchParams(post.body);
+  check('评论：bvid→aid、自动 @ 昵称、POST 带 oid/type/csrf',
+    out.ok && out.aid === '123456' && out.text === '@琥珀之梟 來看這個' && body.get('oid') === '123456'
+      && body.get('type') === '1' && body.get('csrf') === 'JCT',
+    JSON.stringify({ aid: out.aid, text: out.text }));
+
+  const again = await api2.comment({ aid: '123456', message: '@琥珀之梟 早就 @ 了', mentionUid: '23388718' });
+  check('评论：正文已经 @ 过就不重复加', again.text === '@琥珀之梟 早就 @ 了', again.text);
+
+  let long = {};
+  try { await api2.comment({ aid: '123456', message: 'x'.repeat(1001) }); } catch (e) { long = toErrorPayload(e); }
+  check('评论：超过 1000 字拒绝', long.code === 'bili.comment-too-long');
+
+  let noUid = {};
+  try { await api2.comment({ aid: '123456', message: '   ' }); } catch (e) { noUid = toErrorPayload(e); }
+  check('评论：空白正文拒绝', noUid.code === 'bili.empty-comment');
+}
+
+// ── 9b. stdio 接入 ─────────────────────────────────────────────
 {
   const transport = new StdioClientTransport({
     command: process.execPath,
@@ -177,8 +211,8 @@ const baseCfg = { enabled: true, allowFollow: false, requestTimeoutMs: 5000, max
     await client.connect(transport);
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
-    const expected = ['bili_account', 'bili_follow', 'bili_followings', 'bili_mentions'];
-    check('stdio 握手 + 四个工具齐全', JSON.stringify(names) === JSON.stringify(expected), names.join(','));
+    const expected = ['bili_account', 'bili_follow', 'bili_followings', 'bili_mentions', 'bili_reply'];
+    check('stdio 握手 + 五个工具齐全', JSON.stringify(names) === JSON.stringify(expected), names.join(','));
   } catch (error) {
     const message = String(error?.message ?? error);
     if (/EPERM/.test(message)) {

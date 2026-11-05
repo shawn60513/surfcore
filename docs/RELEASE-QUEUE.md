@@ -17,6 +17,17 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-05 17:05 · B站 评论区 @ 人（bili_reply）
+
+- 覆盖提交：待回填（本次提交后由同一会话补上）
+- 功能：新增 MCP 工具 `bili_reply` —— 在视频下发评论 / 回复评论，传 `mentionUid` 会自动把 `@昵称` 补到正文最前（B站 靠纯文本昵称触发通知）；`bili.allowComment` 默认 false，显式打开才允许对外发言。
+- 文件：`src/bili-core.js`（sanitizeComment / userName / resolveAid / comment）、`src/mcp-bili-safe.js`（bili_reply）、`scripts/test-bili-safe.mjs`（+6 项断言）、`config.example.json`（allowComment:false）。
+- case：`docs/cases/2026-11-05-bili-reply-mention.md`
+- 验证：`node scripts/test-bili-safe.mjs` 全过（22 项）、`node scripts/test-audit.mjs` 147/147。
+- 建议版本：**0.9.1 patch**（新增一个工具，不动既有协议）。
+- 已知阻塞：`舜的大肥魚` 未绑手机，写类接口大概率被拒，真机发评论还没验证；运行中的 MCP 是旧代码，要重启 DSH 才会出现 `bili_reply`。
+- 回滚：删掉 `bili_reply` 工具与 `bili-core.js` 里的 comment 段即可，默认关着、零副作用。
+
 ### 批次 2026-11-05 16:35 · B站「@ 我」主动提醒到 Discord
 
 **覆盖提交**：本次提交（分支 `feat/discord-mcp`）

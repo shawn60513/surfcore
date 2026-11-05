@@ -53,6 +53,7 @@ export function loadBiliConfig(root) {
       ? cfg.credentialPath.trim()
       : DEFAULT_CREDENTIAL_PATH,
     allowFollow: cfg.allowFollow === true,
+    allowComment: cfg.allowComment === true,
     requestTimeoutMs: clampInt(cfg.requestTimeoutMs, 15000, 3000, 60000),
     maxItems: clampInt(cfg.maxItems, 30, 1, 100),
   };
@@ -253,5 +254,59 @@ export function createBiliClient({ cred, cfg = {}, fetchImpl = globalThis.fetch,
     return { ok: true, uid: target, action: act === 2 ? 'unfollow' : 'follow', raw: doc.code };
   }
 
-  return { request, me, followings, mentions, follow };
+/** B站 评论上限 1000 字；控制字符会让接口直接 412，先清掉。 */
+  function sanitizeComment(text) {
+    const kept = Array.from(String(text ?? '')).filter((ch) => {
+      const code = ch.codePointAt(0);
+      return !(code < 9 || code === 11 || code === 12 || (code > 13 && code < 32));
+    });
+    const clean = kept.join('').trim();
+    if (!clean) throw new BiliError('bili.empty-comment', '评论正文是空的', '至少写一句话');
+    if (clean.length > 1000) throw new BiliError('bili.comment-too-long', `评论最多 1000 字（现在 ${clean.length}）`, '删短一点再发');
+    return clean;
+  }
+  /** uid → 昵称（@ 要用昵称，B站 评论里的 @ 是纯文本匹配）。 */
+  async function userName(uid) {
+    const doc = await request({ pathname: '/x/web-interface/card', query: { mid: String(uid) } });
+    const card = doc.data?.card ?? {};
+    const name = String(card.name ?? '');
+    if (!name) throw new BiliError('bili.user-not-found', `查不到 uid=${uid} 的昵称`, '确认 UID 是否正确');
+    return name;
+  }
+
+  /** bvid → aid（评论接口只认 aid）。 */
+  async function resolveAid({ bvid, aid } = {}) {
+    const rawAid = String(aid ?? '').trim();
+    if (/^[0-9]+$/.test(rawAid)) return rawAid;
+    const bv = String(bvid ?? '').trim();
+    if (!/^BV[0-9A-Za-z]{10}$/.test(bv)) throw new BiliError('bili.bad-video', '要 bvid（BV 开头）或数字 aid', '从视频链接里取');
+    const doc = await request({ pathname: '/x/web-interface/view', query: { bvid: bv } });
+    const got = String(doc.data?.aid ?? '');
+    if (!got) throw new BiliError('bili.video-not-found', `查不到 ${bv}`, '确认视频还在');
+    return got;
+  }
+
+  /** 在视频下发评论 / 回复评论；mentionUid 给了就自动写 @昵称。对外动作，默认关。 */
+  async function comment({ bvid, aid, message, root, parent, mentionUid } = {}) {
+    if (cfg.allowComment !== true) {
+      throw new BiliError('bili.comment-disabled', '发评论没开', '在 config.json 的 bili.allowComment 设 true');
+    }
+    if (!cred.bili_jct) throw new BiliError('bili.no-credential', '缺少 bili_jct，发不了评论', '重新扫码登录');
+    let text = sanitizeComment(message);
+    let mentioned = null;
+    if (mentionUid) {
+      mentioned = await userName(mentionUid);
+      if (!text.startsWith(`@${mentioned}`)) text = `@${mentioned} ${text}`;
+      if (text.length > 1000) throw new BiliError('bili.comment-too-long', '加上 @ 之后超过 1000 字', '删短一点');
+    }
+    const oid = await resolveAid({ bvid, aid });
+    const body = { type: 1, oid, message: text, plat: 1, csrf: cred.bili_jct };
+    if (root) body.root = String(root);
+    if (parent) body.parent = String(parent);
+    const doc = await request({ method: 'POST', pathname: '/x/v2/reply/add', body });
+    const rpid = doc.data?.rpid_str ?? doc.data?.rpid ?? null;
+    return { ok: true, aid: oid, rpid: rpid === null ? null : String(rpid), mentioned, text, raw: doc.code };
+  }
+
+  return { request, me, followings, mentions, follow, comment, userName, resolveAid };
 }
