@@ -17,6 +17,19 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-06 02:05 · lane 會自己記（日記 + 每晚整理）
+
+- 覆盖提交：本批提交（feat: lane 寫回記憶）
+- 建议版本：**0.9.1 patch**
+- 改了：
+  - 新增 `src/lane-memory.js`：`memoryLayout` / `appendDiary` / `readDiary` / `buildConsolidatePrompt` / `parseConsolidate` / `appendCardEntries`（写前备份）/ `shouldConsolidate`
+  - `src/discord-lane.js`：每轮送出成功后自动追加日记；`tick()` 末尾 `maybeConsolidate()`（小时 ≥ `consolidateHour` 且当天没整理过 → 一轮模型挑 3 条 → 写回记忆卡）
+  - `config.json` / `config.example.json`：`discord.lane.consolidateHour`（默认 23）
+  - 新增 `scripts/test-lane-memory.mjs`（7 组），登记进 `test-audit`
+- case：`docs/cases/2026-11-06-lane-memory-card.md`（追加「让她自己记」一节）
+- 验证：`test-lane-memory` 7 组、`test-discord-lane` 9 组、`test-audit` **148/148**；真机 `01:58:52 記憶卡已載入（164 字）`
+- 回滚：删掉 `consolidateHour` 与 `memoryCard` 即停止写回（`appendDiary` 会因 `memory === null` 直接返回）
+
 ### 批次 2026-11-06 01:55 · Discord lane 每輪帶記憶卡摘要
 
 - 覆盖提交：本批提交（feat: lane 讀星汐記憶卡）

@@ -1,0 +1,117 @@
+// 记忆读写回归：不碰网络、不碰真实档案（全在临时目录）。
+//
+// 事故背景：lane 只会「读」记忆卡摘要，她说的话永远写不回去；
+// 后来决定「日记自动记 + 每晚她自己挑重点」，这里守住写档那一段别写坏格式。
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {
+  appendCardEntries,
+  appendDiary,
+  buildConsolidatePrompt,
+  clockStamp,
+  dayStamp,
+  memoryLayout,
+  parseConsolidate,
+  readDiary,
+  shouldConsolidate,
+} from '../src/lane-memory.js';
+
+const nl = String.fromCharCode(10);
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lane-memory-'));
+const card = path.join(dir, '记忆卡.md');
+
+fs.writeFileSync(card, [
+  '# 档案',
+  '',
+  '## 一｜我是谁',
+  '',
+  '我叫爱弥丝。',
+  '',
+  '## 三｜对方是谁',
+  '- 他喜欢猫。',
+  '',
+  '## 五｜我们的约定',
+  '- 说晚安。',
+  '',
+  '## 六｜难忘的时刻',
+  '- 第一次说早安。',
+  '',
+].join(nl), 'utf8');
+
+const layout = memoryLayout(card);
+assert.equal(memoryLayout(''), null, '空路径 = 没有记忆');
+assert.equal(layout.diaryDir, path.join(dir, '日记'));
+
+// 1) 日期/时间格式
+const at = new Date(2026, 10, 6, 9, 5, 7);
+assert.equal(dayStamp(at), '2026-11-06');
+assert.equal(clockStamp(at), '09:05');
+
+// 2) 日记：第一次写要有标题，之后追加；没有内容的轮次不写
+const diary = appendDiary(layout, { at, user: '今天好累', assistant: '那就早点睡。' });
+assert.equal(diary, path.join(dir, '日记', '2026-11-06.md'));
+assert.equal(fs.existsSync(diary), true);
+assert.equal(readDiary(layout, '2026-11-06').startsWith('【2026-11-06】'), true);
+appendDiary(layout, { at, user: '吃了吗', assistant: '吃了。' });
+const body = readDiary(layout, '2026-11-06');
+assert.equal(body.includes('他：今天好累 → 我：那就早点睡。'), true);
+assert.equal(body.includes('他：吃了吗 → 我：吃了。'), true);
+assert.equal(appendDiary(layout, { at, user: '', assistant: '' }), '', '空对话不写');
+assert.equal(readDiary(layout, '2026-01-01'), '', '没有那天的日记返回空串');
+
+// 3) 整理提示词要带上当天日记，且要求「章号|内容」
+const prompt = buildConsolidatePrompt(body);
+assert.equal(prompt.includes('2026-11-06'), true);
+assert.equal(prompt.includes('三（他是誰'), true);
+assert.equal(prompt.includes('只回一個字：沒有'), true);
+
+// 4) 解析：只认允许的章，杂行丢掉
+const parsed = parseConsolidate([
+  '三|他养了六只猫',
+  '五｜周末去看猫展',
+  '- 六|第一次说早安',
+  '七|不该收的章',
+  '随便说两句',
+  '',
+].join(nl));
+assert.deepEqual(parsed, [
+  { chapter: '三', text: '他养了六只猫' },
+  { chapter: '五', text: '周末去看猫展' },
+  { chapter: '六', text: '第一次说早安' },
+]);
+
+// 5) 写入记忆卡：插在对应章末尾（下一章标题之前），并留备份
+const res = appendCardEntries(card, parsed, at);
+assert.equal(res.added, 3);
+assert.equal(fs.existsSync(res.backup), true, '写之前必须有备份');
+const after = fs.readFileSync(card, 'utf8');
+const lines = after.split(nl);
+const iThree = lines.indexOf('## 三｜对方是谁');
+const iFive = lines.indexOf('## 五｜我们的约定');
+const iSix = lines.indexOf('## 六｜难忘的时刻');
+const iCat = lines.indexOf('- 他养了六只猫');
+const iShow = lines.indexOf('- 周末去看猫展');
+assert.equal(lines[iThree + 1], '- 他喜欢猫。');
+assert.equal(iCat > iThree && iCat < iFive, true, '三章的新条目要在三章里、五章之前');
+assert.equal(iShow > iFive && iShow < iSix, true, '五章的新条目要在五章里、六章之前');
+assert.equal(after.includes('## 七'), false, '不许新开章');
+
+// 6) 空条目 / 未知章：一个都不写，也不产生备份
+const before = fs.readFileSync(card, 'utf8');
+const none = appendCardEntries(card, [{ chapter: '七', text: '坏章' }], at);
+assert.equal(none.added, 0);
+assert.equal(none.backup, '');
+assert.equal(fs.readFileSync(card, 'utf8'), before);
+
+// 7) 每天只整理一次，且要在设定的小时之后
+const eight = new Date(2026, 10, 6, 8, 0, 0);
+const late = new Date(2026, 10, 6, 23, 10, 0);
+assert.equal(shouldConsolidate({ lastConsolidated: '' }, { hour: 23, now: eight }), false);
+assert.equal(shouldConsolidate({ lastConsolidated: '' }, { hour: 23, now: late }), true);
+assert.equal(shouldConsolidate({ lastConsolidated: '2026-11-06' }, { hour: 23, now: late }), false);
+assert.equal(shouldConsolidate({ lastConsolidated: '2026-11-05' }, { hour: 23, now: late }), true);
+
+fs.rmSync(dir, { recursive: true, force: true });
+console.log('test-lane-memory: 7 组断言通过');

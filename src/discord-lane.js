@@ -13,6 +13,7 @@
 // 限制：只走 REST（沒有 gateway），所以是輪詢（預設 60s），不是即時推送。
 import fs from 'node:fs';
 import path from 'node:path';
+import { appendCardEntries, appendDiary, buildConsolidatePrompt, dayStamp, memoryLayout, parseConsolidate, readDiary, shouldConsolidate } from './lane-memory.js';
 import { pathToFileURL } from 'node:url';
 
 import { NodeApiClient, unwrap, createTurnCollector, blocksToText } from './dsh-client.js';
@@ -282,6 +283,8 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
   const quiet = { start: laneCfg.quietStart ?? 23, end: laneCfg.quietEnd ?? 8 };
   const proactiveEnabled = laneCfg.proactive !== false;
   const memoryCard = String(laneCfg.memoryCard ?? '').trim();
+  const memory = memoryLayout(memoryCard);
+  const consolidateHour = Number(laneCfg.consolidateHour ?? 23);
 
   const state = {
     version: LANE_VERSION,
@@ -293,6 +296,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     lastUserAt: 0,
     lastBotAt: 0,
     lastProactiveAt: 0,
+    lastConsolidated: '',
     ...readJson(stateFile, {}),
   };
   // 本進程啟動時間：用來分辨「DM 裡的歷史訊息」與「啟動後才到的新訊息」。
@@ -589,6 +593,39 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       .join('\n');
   }
 
+  /**
+   * 每天一次：把今天的日记交给她自己挑最多 3 条，再追加进记忆卡。
+   * 她只负责「挑 + 标章号」，写档由 appendCardEntries 做（会先备份）。
+   */
+  async function maybeConsolidate() {
+    if (!memory || once) return;
+    const now = new Date();
+    if (!shouldConsolidate(state, { hour: consolidateHour, now })) return;
+    const today = dayStamp(now);
+    const diary = readDiary(memory, today);
+    if (!diary.trim()) {
+      state.lastConsolidated = today;
+      save();
+      return;
+    }
+    state.lastConsolidated = today;
+    save();
+    try {
+      const answer = await runTurn(buildConsolidatePrompt(diary));
+      const entries = answer.trim() === "沒有" ? [] : parseConsolidate(answer);
+      if (!entries.length) {
+        log("Discord lane：記憶整理完成（今天沒有新東西）");
+        return;
+      }
+      const res = appendCardEntries(memory.cardFile, entries, now);
+      log(`Discord lane：記憶整理完成（${res.added} 條，已備份 ${path.basename(res.backup)}）`);
+    } catch (error) {
+      state.lastConsolidated = "";
+      save();
+      log(`Discord lane：記憶整理失敗（明天再試）：${error?.message ?? error}`);
+    }
+  }
+
   // ── 主循環 ──────────────────────────────────────────────────────────────
 
   async function tick() {
@@ -659,6 +696,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
           // 送出成功才推水位：模型或網路失敗時，下一輪會重試同一則，而不是讓它永久消失。
           state.lastMessageId = msg.id;
           save();
+          appendDiary(memory, { user: content, assistant: reply });
           log(`Discord lane：回了 ${msg.author ?? ''} 一句`);
         } catch (error) {
           log(`Discord lane 回覆失敗（這則保留，下一輪重試）：${error?.message ?? error}`);
@@ -687,6 +725,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
           }
         }
       }
+      await maybeConsolidate();
     } catch (error) {
       log(`Discord lane tick 失敗：${error?.message ?? error}`);
     } finally {

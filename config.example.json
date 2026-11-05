@@ -423,7 +423,8 @@
       "quietStart": 23,
       "quietEnd": 8,
       "proactive": true,
-      "memoryCard": ""
+      "memoryCard": "",
+      "consolidateHour": 23
     },
     "mentionUsers": [],
     "pingOnReply": true,
