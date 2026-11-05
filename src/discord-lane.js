@@ -32,6 +32,10 @@ const DEFAULT_POLL_MS = 60_000;
 const DEFAULT_IDLE_MINUTES = 120;
 const TURN_TIMEOUT_MS = 180_000;
 const HISTORY_LIMIT = 24;
+// 图片：最多 4 张、合计 8MB、单张抓取 15 秒——Discord 的 CDN 偶尔会慢，但不该拖死整轮。
+const MAX_IMAGE_COUNT = 4;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_FETCH_MS = 15_000;
 
 // ── 小工具 ────────────────────────────────────────────────────────────────
 
@@ -124,6 +128,19 @@ export function samePromptText(a, b) {
 }
 
 /**
+ * 事件裡的 user 訊息是否就是我們送出的那則 prompt。
+ * DSH 會把 image part 一起存進 user/message，此外還可能追加圖片說明之類的文字，
+ * 所以除了完全相等，也接受「以 prompt 開頭」——只認尾巴多出來的部分，不放寬到任意相似。
+ */
+export function isPromptMessage(text, promptText) {
+  if (samePromptText(text, promptText)) return true;
+  const norm = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
+  const prompt = norm(promptText);
+  const got = norm(text);
+  return prompt !== '' && got.startsWith(prompt);
+}
+
+/**
  * 由事件順序判斷「這一輪是不是我發起的」。
  * 兩種順序都要支援：
  *   · turn/start → user/message（一般情況）
@@ -150,7 +167,7 @@ export function createTurnAttributor() {
       const startedAt = lastStartAt;
       lastStartTurn = null;
       lastStartAt = 0;
-      if (!promptText || !samePromptText(text, promptText)) return null;
+      if (!promptText || !isPromptMessage(text, promptText)) return null;
       if (turn != null && startedAt >= Number(promptedAt ?? 0)) {
         orphans = [];
         return turn;
@@ -381,7 +398,43 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     }
   }
 
-  async function runTurn(promptText) {
+  /**
+   * 把 Discord 附件里的图片抓下来，转成 DSH prompt 认识的 image part。
+   * 抓不到/不支持就当普通文字说明，绝不因为一张图让整条消息卡住。
+   */
+  async function fetchImageParts(attachments) {
+    const notes = [];
+    const list = (Array.isArray(attachments) ? attachments : []).filter((file) =>
+      /^image\//i.test(String(file?.contentType ?? ''))
+    );
+    const parts = [];
+    let total = 0;
+    for (const [index, file] of list.slice(0, MAX_IMAGE_COUNT).entries()) {
+      if (!file?.url) continue;
+      try {
+        const response = await fetch(file.url, { signal: AbortSignal.timeout(MAX_IMAGE_FETCH_MS) });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const buffer = Buffer.from(await response.arrayBuffer());
+        if (total + buffer.length > MAX_IMAGE_BYTES) {
+          notes.push(`[圖片${index + 1} 太大，沒送進去]`);
+          continue;
+        }
+        total += buffer.length;
+        notes.push(`[圖片${index + 1}：${file.filename || 'image'}]`);
+        parts.push({
+          type: 'image',
+          mediaType: file.contentType || 'image/jpeg',
+          data: buffer.toString('base64'),
+          name: file.filename || `discord-${index + 1}.jpg`,
+        });
+      } catch (error) {
+        notes.push(`[圖片${index + 1} 沒抓下來：${error?.message ?? error}]`);
+      }
+    }
+    return { parts, note: notes.join(String.fromCharCode(10)) };
+  }
+
+  async function runTurn(promptText, extraParts = []) {
     const sessionId = await ensureSession();
     if (waiting) throw new Error('上一個回合還沒結束');
     const mine = { promptText, promptedAt: Date.now(), turn: null };
@@ -391,7 +444,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
           waiting = null;
           collector = null;
         }
-        reject(new Error('等待回合逾時'));
+        reject(new Error(`等待回合逾時（turn=${mine.turn ?? 'null'}）`));
       }, TURN_TIMEOUT_MS);
       timer.unref?.();
       mine.resolve = (t) => { clearTimeout(timer); resolve(t); };
@@ -403,7 +456,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     const accepted = await api.sessions.prompt({
       sessionId,
       mode: 'queue',
-      content: [{ type: 'text', text: promptText }],
+      content: [{ type: 'text', text: promptText }, ...extraParts],
     });
     if (!accepted?.result?.ok) {
       if (waiting === mine) waiting = null;
@@ -492,10 +545,26 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
           save();
           continue;
         }
+        const hasImages = Array.isArray(msg.attachments) && msg.attachments.some((file) => /^image\//i.test(String(file?.contentType ?? '')));
         const content =
-          msg.content || '（對方發來一則沒有文字的訊息——可能是圖片或表情，但這裡讀不到內容）';
+          msg.content ||
+          (hasImages ? '（對方發來一張圖片，圖在下面——先看圖再說。）' : '（對方發來一則沒有文字的訊息）');
         try {
-          const reply = await runTurn(replyPrompt(String(msg.author ?? ''), content));
+          const images = hasImages
+            ? await fetchImageParts(msg.attachments).catch(() => ({ parts: [], note: '' }))
+            : { parts: [], note: '' };
+          const imageParts = images.parts;
+          const basePrompt = replyPrompt(String(msg.author ?? ''), content);
+          const promptText = images.note ? basePrompt + String.fromCharCode(10) + images.note : basePrompt;
+          let reply;
+          try {
+            reply = await runTurn(promptText, imageParts);
+          } catch (error) {
+            // 模型不认图片 / 图太大时，退回纯文字，别让这则消息就此消失。
+            if (!imageParts.length || !/prompt 被拒|image/i.test(String(error?.message ?? ''))) throw error;
+            log(`Discord lane：帶圖那輪沒過（${error?.message ?? error}），退回純文字重試`);
+            reply = await runTurn(promptText);
+          }
           pushHistory('user', content);
           pushHistory('bot', reply);
           state.lastUserAt = Date.now();

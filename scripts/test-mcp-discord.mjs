@@ -11,6 +11,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import {
   createDiscordClient,
   loadDiscordConfig,
+  normalizeMessage,
   sanitizeMessageContent,
   toErrorPayload,
 } from '../src/discord-core.js';
@@ -178,6 +179,18 @@ check('缺 config 时默认启用且白名单为空（fail-closed）', defaults.
   const relaxed = createDiscordClient({ token: 'x', cfg: { ...baseCfg, allowDm: true }, fetchImpl });
   const sent = await relaxed.sendMessage('555555555555555555', { content: 'hi' });
   check('allowDm=true 时私聊可发', sent.ok === true);
+}
+
+// ── 5e. 附件要带出来（lane 靠它抓图给模型看） ────────────────────
+{
+  const message = normalizeMessage({
+    id: '777777777777777777',
+    content: '',
+    author: { id: '1', username: 'me' },
+    attachments: [{ id: 'a1', filename: 'cat.png', content_type: 'image/png', size: 1234, url: 'https://cdn.discordapp.com/a1.png' }],
+  });
+  check('附件带 url/contentType', message.attachments?.[0]?.url === 'https://cdn.discordapp.com/a1.png' && message.attachments[0].contentType === 'image/png');
+  check('空正文但带附件时 content 不为空', message.content.includes('cat.png'));
 }
 
 // ── 6. allowSend=false → 关闭发送 ───────────────────────────────

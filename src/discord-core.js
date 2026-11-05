@@ -199,6 +199,13 @@ export function normalizeMessage(message, { maxContent = 1500 } = {}) {
     replyTo: message?.message_reference?.message_id ? String(message.message_reference.message_id) : null,
     edited: Boolean(message?.edited_timestamp),
     content: parts.join('\n').trim(),
+    attachments: attachments.slice(0, 5).map((file) => ({
+      id: String(file?.id ?? ''),
+      filename: String(file?.filename ?? ''),
+      contentType: String(file?.content_type ?? ''),
+      size: Number(file?.size ?? 0),
+      url: String(file?.url ?? ''),
+    })),
   };
 }
 

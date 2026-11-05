@@ -6,7 +6,7 @@
 // 用户那边的表现是「干话有回、但这句话永远送不到 Discord」。
 // 这里的每个用例都对应真实事件顺序（见 docs/cases/2026-11-05-discord-lane-turn-ownership.md）。
 import assert from 'node:assert/strict';
-import { createTurnAttributor, samePromptText } from '../src/discord-lane.js';
+import { createTurnAttributor, isPromptMessage, samePromptText } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -74,4 +74,15 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(a.onUserMessage(PROMPT, PROMPT, T0), null);
 }
 
-console.log('test-discord-lane: 7 组断言通过');
+// 8) 帶圖的訊息：事件正文是 prompt 加一行圖片說明，也必須認得出來。
+//    （2026-11-06 的事故：圖片說明被塞成另一個 text block，正文永遠對不上，
+//     lane 等滿 180 秒超時、水位不動，同一張圖被反覆送進去。）
+{
+  const a = createTurnAttributor();
+  const withImage = PROMPT + String.fromCharCode(10) + "[圖片1：IMG_7767.jpg]";
+  assert.equal(isPromptMessage(withImage, PROMPT), true, "圖片說明在尾巴算同一則");
+  assert.equal(isPromptMessage(PROMPT + String.fromCharCode(10) + "[圖片1：別的.jpg]", "對方剛說：碼呢"), false, "完全不同的話不能認");
+  a.onTurnStart(40, T0 + 10, PROMPT);
+  assert.equal(a.onUserMessage(withImage, PROMPT, T0), 40, "帶圖那輪要歸到自己頭上");
+}
+console.log('test-discord-lane: 8 组断言通过');

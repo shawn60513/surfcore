@@ -17,6 +17,19 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-06 01:20 · Discord 圖片（看得到 / 不再重複）
+
+- 覆盖提交：`fe82f01`（feat: 图片支持 + 重复修复，同一批）
+- 建议版本：**0.9.1 patch**
+- 改了：
+  - `src/discord-core.js` `normalizeMessage()` 带出 `attachments`（id/filename/contentType/size/url）
+  - `src/discord-lane.js` 图片转 image part 送进模型；图片说明并入 promptText；新增 `isPromptMessage()`；超时错误带 turn
+  - `scripts/test-mcp-discord.mjs`（附件断言）、`scripts/test-discord-lane.mjs`（8 组，含带图归属）
+- case：`docs/cases/2026-11-06-discord-image-duplicate.md`
+- 验证：`test-mcp-discord` / `test-discord-lane`（8 组）/ `test-audit` 147/147；真机 01:14:44 恢复只回一次
+- 回滚：`git revert` 本批；运行中的 lane 需重启 bridge 才回到旧行为
+
+
 ### 批次 2026-11-05 17:05 · B站 评论区 @ 人（bili_reply）
 
 - 覆盖提交：`1b90117`（feat: bili_reply）
