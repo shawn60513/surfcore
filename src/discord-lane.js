@@ -540,6 +540,26 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
   }
 
   return {
+    /**
+     * 从外面塞一句话给她（例如 B站 有人 @ 了她），她的回答照样送回 Discord。
+     * 跟主动开口共用同一个 working 闸，不会和轮询抢同一轮。
+     */
+    async nudge(promptText) {
+      if (working) return false;
+      working = true;
+      try {
+        const reply = await runTurn(String(promptText));
+        if (!reply || reply.replace(/[。！!.…s]/g, '') === '跳過') return false;
+        pushHistory('bot', reply);
+        state.lastBotAt = Date.now();
+        save();
+        await send(reply);
+        log('Discord lane：主動提醒了一句（外部 nudge）');
+        return true;
+      } finally {
+        working = false;
+      }
+    },
     async start() {
       if (!enabled) return;
       if (!userId) {

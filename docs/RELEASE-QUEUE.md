@@ -17,6 +17,37 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-05 16:35 · B站「@ 我」主动提醒到 Discord
+
+**覆盖提交**：本次提交（分支 `feat/discord-mcp`）
+**建议**：**0.9.0（minor）** —— 与 Discord lane / Discord MCP / B站 safe MCP 一起发
+
+**改了什么**：
+- 新增 `src/bili-inbox.js`：每 10 分钟拉 B站 `/x/msgfeed/at` 与 `/x/msgfeed/reply`，
+  新条目通过 `lane.nudge()` 塞一句给 愛彌絲，回答照常回 Discord 私訊。
+  首轮只记水位、同一条只提醒一次、送不出去不记水位。
+- `src/bili-core.js` 的 `normalizeMention` 增加 `text`（`source_content`，对方原话）与 `type`。
+- `src/discord-lane.js` 新增 `nudge(promptText)`，与主动开口共用 `working` 闸。
+- `src/bridge.js` 在 lane 启动后起 inbox；`bili.enabled=false` 或没有 lane 就不启动。
+- 新测试 `scripts/test-bili-inbox.mjs`（11 项）并入 `test:audit`。
+
+**没做**：
+- 不看点赞；不接 B站 私信与动态流；
+- 不自动代回 B站 —— 回不回仍由她自己判断。
+
+**验证**：
+```text
+node scripts/test-bili-inbox.mjs    # 11 项
+node scripts/test-audit.mjs         # 147/147
+16:32:34 [bridge] B站提醒：已啟動（每 10 分鐘看一次 @ / 回覆）
+16:32:34 [bridge] B站提醒：首次記錄 2 條水位，不提醒
+```
+
+**回滚**：删掉 bridge 里 `import('./bili-inbox.js')` 那段（或把 `bili.enabled` 设 false），
+提醒就停；`bili_mentions` 工具本身不受影响。
+
+---
+
 ### 批次 2026-11-05 16:20 · Discord @ 人（mention 白名单 + 回复 ping）
 
 **覆盖提交**：本次提交（分支 `feat/discord-mcp`）

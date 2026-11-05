@@ -176,7 +176,10 @@ export function normalizeMention(kind, item = {}) {
     id: String(content.id ?? item.id ?? ''),
     user: user.name,
     uid: user.uid,
-    title: String(content.title ?? content.source_content ?? '').trim(),
+    // title 是「在哪条内容下面」；text 才是对方真正说的话（B站 把它放在 source_content）。
+    title: String(content.title ?? '').trim(),
+    text: String(content.source_content ?? content.content ?? '').trim(),
+    type: String(content.type ?? ''),
     url: String(content.uri ?? content.native_uri ?? ''),
     at: Number(item.at_time ?? item.timestamp ?? 0) || null,
   };

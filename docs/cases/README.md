@@ -6,6 +6,7 @@
 
 | 日期 | 案例 | 一句话 | 版本 |
 | --- | --- | --- | --- |
+| 2026-11-05 | [B站 有人 @ 她，Discord 没动静](2026-11-05-bili-inbox.md) | `bili_mentions` 要问才看；改成每 10 分钟主动提醒，带对方原话 | 待发布 |
 | 2026-11-05 | [新增 B站 safe MCP（看关注 / 看 @）](2026-11-05-bili-safe-mcp.md) | 宿主工具面没有关注列表与 @我；自建只读 MCP，关注默认关 | 待发布 |
 | 2026-11-05 | [Discord 私訊「DSH 有回、Discord 沒收到」](2026-11-05-discord-lane-turn-ownership.md) | lane 只認自己發起的回合；水位改成功才推進；4 條漏訊回歸 | 待发布 |
 | 2026-11-05 | [新增 Discord MCP（会话内读写 Discord）](2026-11-05-discord-mcp.md) | REST-only、白名单 fail-closed、压制 @everyone；6 工具；144/144 审计 | 待发布 |

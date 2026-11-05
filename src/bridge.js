@@ -3230,7 +3230,14 @@ async function main() {
   // 預設關閉：config.json 的 discord.lane.enabled 必須是 true 才啟動。
   if (cfg.discord?.lane?.enabled === true) {
     import('./discord-lane.js')
-      .then(({ createDiscordLane }) => createDiscordLane({ root: ROOT, cfg, log }).start())
+      .then(({ createDiscordLane }) => {
+        const lane = createDiscordLane({ root: ROOT, cfg, log });
+        lane.start();
+        // B站「@ 我」提醒：有新 @ / 新回复就塞一句给她，回答照样走 Discord。
+        import('./bili-inbox.js')
+          .then(({ createBiliInbox }) => createBiliInbox({ root: ROOT, cfg, log, lane }).start())
+          .catch((error) => log(`B站提醒啟動失敗：${error?.message ?? error}`));
+      })
       .catch((error) => log(`Discord lane 啟動失敗：${error?.message ?? error}`));
   }
   // DSH 的模型目录 RPC：0.1.5 是 `session/modelCatalog`。**不能走基类门面**
