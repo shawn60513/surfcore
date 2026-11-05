@@ -18,7 +18,7 @@
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
 ### 批次 2026-11-05 15:05 · Discord 私訊 lane 上線 + 回合歸屬修正
-<!-- release-batch: start=2026-11-05T14:45+08:00 end=2026-11-05T15:05+08:00 commits=5e28ac1,5e28ac1+ -->
+<!-- release-batch: start=2026-11-05T14:45+08:00 end=2026-11-05T15:05+08:00 commits=5e28ac1,114f5ae,583cc2a,187211f -->
 
 **覆蓋提交**：`5e28ac1`、`114f5ae`、`583cc2a` 與本次補回 `ensureSession()` 的提交（分支 `feat/discord-mcp`，基於 `01d030f`）
 **建議**：**0.9.0（minor）** —— 與上一個 Discord MCP 批次一起發；新增「私訊聊天 + 主動開口」能力
