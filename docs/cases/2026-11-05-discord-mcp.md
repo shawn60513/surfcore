@@ -114,3 +114,6 @@
 `pingOnReply=false` 关闭 ping）；`node scripts/test-discord-lane.mjs` 7 组；`node scripts/test-audit.mjs` 146/146。
 
 **遗留**：`mentionUsers` 目前只有用户本人（`704494548008697926`）；要 @ 别人得往配置里加 ID。
+
+**追加**：`discord_read_messages` / `discord_send_message` 现在也能读/发私聊（channel type 1/3），
+但要 `discord.allowDm: true` 才放行（默认 false）；DM 没有所属服务器，白名单对它不起作用，所以单独开关。

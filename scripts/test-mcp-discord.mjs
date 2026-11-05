@@ -162,6 +162,24 @@ check('缺 config 时默认启用且白名单为空（fail-closed）', defaults.
   check('pingOnReply=false 关闭回复 ping', post?.body?.allowed_mentions?.replied_user === undefined);
 }
 
+// ── 5d. 私聊频道：默认拒绝，allowDm=true 才放行 ────────────────
+{
+  const fetchImpl = fakeFetch(({ url, method }) => {
+    if (method === 'GET' && url.includes('/channels/')) return { json: { id: '555555555555555555', type: 1 } };
+    return { json: { id: '666666666666666666', content: 'hi' } };
+  });
+  const strict = createDiscordClient({ token: 'x', cfg: baseCfg, fetchImpl });
+  try {
+    await strict.sendMessage('555555555555555555', { content: 'hi' });
+    check('私聊默认被拒绝', false);
+  } catch (error) {
+    expectError('私聊默认被拒绝', error, 'discord.dm-disabled');
+  }
+  const relaxed = createDiscordClient({ token: 'x', cfg: { ...baseCfg, allowDm: true }, fetchImpl });
+  const sent = await relaxed.sendMessage('555555555555555555', { content: 'hi' });
+  check('allowDm=true 时私聊可发', sent.ok === true);
+}
+
 // ── 6. allowSend=false → 关闭发送 ───────────────────────────────
 {
   const client = createDiscordClient({

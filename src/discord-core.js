@@ -71,6 +71,7 @@ export function loadDiscordConfig(root) {
     channelIds: normalizeIds(raw.channelIds),
     allowSend: raw.allowSend !== false,
     mentionUsers: normalizeIds(raw.mentionUsers),
+    allowDm: raw.allowDm === true,
     pingOnReply: raw.pingOnReply !== false,
     maxReadLimit: clampInt(raw.maxReadLimit, 50, 1, 100),
     maxContentLength: clampInt(raw.maxContentLength, 2000, 1, 2000),
@@ -219,7 +220,9 @@ export function sanitizeMessageContent(text, maxLength = 2000) {
   return cleaned;
 }
 
-const TEXT_CHANNEL_TYPES = new Set([0, 5, 10, 11, 12, 15, 16]); // 文本 / 公告 / 公告子区(10) / 公开子区(11) / 私密子区(12) / 论坛
+// 文本 / 私聊(1) / 群组私聊(3) / 公告 / 公告子区(10) / 公开子区(11) / 私密子区(12) / 论坛 / 论坛子区(15,16)
+const TEXT_CHANNEL_TYPES = new Set([0, 1, 3, 5, 10, 11, 12, 15, 16]);
+const DM_CHANNEL_TYPES = new Set([1, 3]);
 
 /**
  * 建一个 Discord 客户端：频道解析 + 白名单校验 + 常用动作。
@@ -257,6 +260,15 @@ export function createDiscordClient({ token, cfg, fetchImpl, timeoutMs, sleep, n
         'discord.not-text-channel',
         `频道 ${channelId} 不是可发文本的频道（type=${channel?.type}）`,
         '用 discord_list_channels 找一个文本频道再试'
+      );
+    }
+    // 私聊没有 guild_id，靠单独开关放行（默认关：DM 里发消息不经过服务器白名单，风险更高）。
+    if (DM_CHANNEL_TYPES.has(Number(channel?.type))) {
+      if (cfg?.allowDm === true) return channel;
+      throw new DiscordError(
+        'discord.dm-disabled',
+        `频道 ${channelId} 是私聊，当前 dm 未开启`,
+        '确认要把工具接到私聊，就把 config.json 的 discord.allowDm 改成 true'
       );
     }
     const guildId = String(channel?.guild_id ?? '');

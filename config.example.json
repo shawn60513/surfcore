@@ -425,7 +425,8 @@
       "proactive": true
     },
     "mentionUsers": [],
-    "pingOnReply": true
+    "pingOnReply": true,
+    "allowDm": false
   },
   "greetings": {
     "enabled": false,
