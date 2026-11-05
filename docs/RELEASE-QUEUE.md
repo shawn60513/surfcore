@@ -17,6 +17,35 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-05 16:20 · Discord @ 人（mention 白名单 + 回复 ping）
+
+**覆盖提交**：本次提交（分支 `feat/discord-mcp`）
+**建议**：**0.9.0（minor）** —— 与 Discord 私訊 lane、B站 safe MCP 一起发
+
+**改了什么**：
+- `src/discord-core.js` 新增 `allowedMentionsFor(cfg, mentions, isReply)`：`@everyone`/`@role` 继续压制，
+  只有 `discord.mentionUsers` 白名单里的用户 ID 会真的 ping；回复时按 `pingOnReply` ping 被回复的人。
+- `discord_send_message` / `discord_edit_message` 增加 `mentions` 参数；`src/discord-lane.js` 的 DM
+  发送也认正文里的 `<@id>`。
+- `src/mcp-discord-safe.js` 改成每次调用现读 config/token，改白名单/开关不用重启 DSH。
+- `config.example.json` 增加 `mentionUsers: []` / `pingOnReply: true` 样例。
+
+**没做**：
+- 没有「按名字 @ 人」——Discord 只认 ID；
+- `mentionUsers` 默认空，白名单要手动加；
+- @role 仍然一律压制。
+
+**验证**：
+```text
+node scripts/test-mcp-discord.mjs    # 21/21
+node scripts/test-discord-lane.mjs   # 7 组
+node scripts/test-audit.mjs          # 146/146
+```
+
+**回滚**：把 `discord.pingOnReply` 设 `false`、`mentionUsers` 清空，即可回到「谁都不 ping」。
+
+---
+
 ### 批次 2026-11-05 15:50 · 新增 B站 safe MCP（看关注 / 看 @）
 
 **覆盖提交**：本次提交（分支 `feat/discord-mcp`）

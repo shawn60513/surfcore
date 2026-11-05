@@ -22,6 +22,7 @@ import {
   resolveDiscordToken,
   discordRequest,
   normalizeMessage,
+  allowedMentionsFor,
 } from './discord-core.js';
 import { readPersonaLayerText, personaNameFromText } from './character-persona.js';
 import { discoverDshBaseUrl, isLoopbackBaseUrl, probeDshBaseUrl } from './dsh-port.js';
@@ -261,11 +262,14 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     const parts = splitContent(text, 1900).filter(Boolean);
     if (!parts.length) return;
     for (const part of parts) {
+      // 正文里的 <@id> 只有落在 discord.mentionUsers 白名单里才会真的 ping；
+      // @everyone/@role 依旧压制（parse 恒为空）。
+      const mentions = [...String(part).matchAll(/<@!?(\d+)>/g)].map((m) => m[1]);
       await discordRequest({
         token,
         method: 'POST',
         route: `/channels/${channelId}/messages`,
-        body: { content: part, allowed_mentions: { parse: [] } },
+        body: { content: part, allowed_mentions: allowedMentionsFor(discordCfg, mentions, false) },
       });
     }
   }

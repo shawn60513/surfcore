@@ -120,11 +120,46 @@ check('缺 config 时默认启用且白名单为空（fail-closed）', defaults.
   const post = fetchImpl.calls.find((c) => c.method === 'POST');
   check('发送成功返回消息 id', sent.ok === true && sent.id === '111111111111111111');
   check(
-    '发送时压制 @everyone/@role',
-    post?.body?.allowed_mentions?.parse?.length === 0 && post?.body?.allowed_mentions?.replied_user === false
+    '发送时压制 @everyone/@role（parse 恒为空）',
+    post?.body?.allowed_mentions?.parse?.length === 0
+  );
+  check(
+    '回复时默认 ping 被回复的人',
+    post?.body?.allowed_mentions?.replied_user === true
+  );
+  check(
+    '没有 mentions 时不放行任何用户 ping',
+    post?.body?.allowed_mentions?.users === undefined
   );
   check('replyTo 变 message_reference', post?.body?.message_reference?.message_id === '222222222222222222');
   check('请求带 Bot 认证头且不泄漏到返回值', post?.headers?.Authorization === 'Bot x' && !JSON.stringify(sent).includes('Bot x'));
+}
+
+// ── 5b. @ 人：只有白名单 ID 会真的 ping ─────────────────────────
+{
+  const fetchImpl = fakeFetch(({ url, method }) => {
+    if (method === 'GET' && url.includes('/channels/')) return { json: { id: CHANNEL, type: 0, guild_id: GUILD } };
+    return { json: { id: '333333333333333333', content: 'hi' } };
+  });
+  const cfg = { ...baseCfg, mentionUsers: ['42'], pingOnReply: true };
+  const client = createDiscordClient({ token: 'x', cfg, fetchImpl });
+  await client.sendMessage(CHANNEL, { content: '<@42> <@99>', mentions: ['42', '99'] });
+  const post = fetchImpl.calls.find((c) => c.method === 'POST');
+  check('只有白名单里的 ID 进 allowed_mentions.users', JSON.stringify(post?.body?.allowed_mentions?.users) === '["42"]', JSON.stringify(post?.body?.allowed_mentions));
+  check('非回复时不带 replied_user', post?.body?.allowed_mentions?.replied_user === undefined);
+}
+
+// ── 5c. pingOnReply=false 时回复也不 ping ────────────────────────
+{
+  const fetchImpl = fakeFetch(({ url, method }) => {
+    if (method === 'GET' && url.includes('/channels/')) return { json: { id: CHANNEL, type: 0, guild_id: GUILD } };
+    return { json: { id: '444444444444444444', content: 'hi' } };
+  });
+  const cfg = { ...baseCfg, mentionUsers: [], pingOnReply: false };
+  const client = createDiscordClient({ token: 'x', cfg, fetchImpl });
+  await client.sendMessage(CHANNEL, { content: 'hi', replyTo: '222222222222222222' });
+  const post = fetchImpl.calls.find((c) => c.method === 'POST');
+  check('pingOnReply=false 关闭回复 ping', post?.body?.allowed_mentions?.replied_user === undefined);
 }
 
 // ── 6. allowSend=false → 关闭发送 ───────────────────────────────

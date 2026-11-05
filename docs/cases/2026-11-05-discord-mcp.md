@@ -89,3 +89,28 @@
   需要先确认适配器是否启用。
 - 附件只能看到元数据（文件名/大小/类型），不下载内容。
 - 线程（thread）里的消息：`discord_read_messages` 传 thread id 也能读，但没有专门的 thread 工具。
+
+## 追加 2026-11-05 16:20 · 为什么「@不到人」
+
+**现象**：用户在 DM 里让 愛彌絲「@我一下」，她回「我这边只开了看的那一半……反手去@你，按钮没有」。
+
+**根因**：`sendMessage` / `editMessage` 把 `allowed_mentions: { parse: [], replied_user: false }` 写死。
+抑制 @everyone 是对的，但顺手把「@具体某个人」和「回复时 ping 对方」也一起关了——Discord 侧的表现就是
+`<@id>` 只是灰字、不亮、不推送。
+
+**改法**（白名单式放行，不放弃压制）：
+- `src/discord-core.js` 新增 `allowedMentionsFor(cfg, mentions, isReply)`：`parse` 恒空；
+  `users` 只放行 `discord.mentionUsers` 里出现过的 ID；`isReply && cfg.pingOnReply !== false` 时
+  `replied_user: true`。
+- `loadDiscordConfig` 增加 `mentionUsers`（默认空 = 谁都不 ping）与 `pingOnReply`（默认 true）。
+- `discord_send_message` / `discord_edit_message` 增加 `mentions` 参数；正文写 `<@用户ID>` 才会渲染成真 mention。
+- `src/discord-lane.js` 的 DM 发送也从正文里抽 `<@id>`，同样只放行白名单。
+- `src/mcp-discord-safe.js` 改成**每次调用现读** config/token（原来进程启动读一次），改白名单不用重启 DSH。
+
+**为什么不是全放开**：`parse: []` 留着是为了 @everyone / @role；只放开 `users` 白名单里的 ID，
+被其他人拿到 bot 也 ping 不到无关的人。
+
+**验证**：`node scripts/test-mcp-discord.mjs` 21/21（新增：白名单外的 ID 被丢弃、非回复不带 `replied_user`、
+`pingOnReply=false` 关闭 ping）；`node scripts/test-discord-lane.mjs` 7 组；`node scripts/test-audit.mjs` 146/146。
+
+**遗留**：`mentionUsers` 目前只有用户本人（`704494548008697926`）；要 @ 别人得往配置里加 ID。

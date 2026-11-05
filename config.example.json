@@ -423,7 +423,9 @@
       "quietStart": 23,
       "quietEnd": 8,
       "proactive": true
-    }
+    },
+    "mentionUsers": [],
+    "pingOnReply": true
   },
   "greetings": {
     "enabled": false,

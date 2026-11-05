@@ -34,9 +34,17 @@ function projectRoot() {
 }
 
 const root = projectRoot();
-const cfg = loadDiscordConfig(root);
-const { token, source } = resolveDiscordToken(cfg);
-const client = createDiscordClient({ token, cfg });
+
+/**
+ * 每次调用现读配置与 token：改 config.json 的 mentionUsers / allowSend / 白名单
+ * 不用重启 DSH 就生效（代价只是每次多读一个小文件）。
+ */
+function current() {
+  const cfg = loadDiscordConfig(root);
+  const resolved = resolveDiscordToken(cfg);
+  const client = createDiscordClient({ token: resolved.token, cfg });
+  return { cfg, client, token: resolved.token, source: resolved.source };
+}
 
 const server = new McpServer({ name: 'discord', version: '0.1.0' });
 
@@ -46,6 +54,7 @@ function text(payload) {
 
 /** 统一出口：成功回数据，失败回结构化错误（1.7：看得见 + 给下一步）。 */
 async function run(fn) {
+  const { cfg } = current();
   if (!cfg.enabled) {
     return {
       content: [
@@ -67,7 +76,7 @@ async function run(fn) {
     };
   }
   try {
-    return text(await fn());
+    return text(await fn(current()));
   } catch (error) {
     return { content: [{ type: 'text', text: JSON.stringify(toErrorPayload(error), null, 2) }], isError: true };
   }
@@ -78,7 +87,7 @@ server.tool(
   'Discord 连接自检：返回 bot 身份、token 来源、白名单服务器数量、发送开关。只读，不发送任何消息。',
   {},
   async () =>
-    run(async () => {
+    run(async ({ cfg, client, token, source }) => {
       if (!token) {
         throw new DiscordError(
           'discord.no-token',
@@ -111,7 +120,7 @@ server.tool(
   '列出白名单服务器里可发文本的频道（id + 名称）。只读。发消息前先用它找频道 ID。',
   {},
   async () =>
-    run(async () => {
+    run(async ({ cfg, client, token, source }) => {
       const guilds = await client.listChannels();
       return { ok: true, guilds };
     })
@@ -126,7 +135,7 @@ server.tool(
     before: z.string().optional().describe('只取这条消息 ID 之前的记录（翻页用）'),
   },
   async ({ channel, limit, before }) =>
-    run(async () => {
+    run(async ({ cfg, client, token, source }) => {
       const messages = await client.readMessages(channel, { limit, before });
       return { ok: true, channel: String(channel), count: messages.length, messages };
     })
@@ -134,14 +143,15 @@ server.tool(
 
 server.tool(
   'discord_send_message',
-  '在 Discord 文本频道发一条消息（可指定 replyTo 引用某条消息）。会压制 @everyone/@role 的 ping。这是对外发送操作。',
+  '在 Discord 文本频道发一条消息（可指定 replyTo 引用某条消息）。@everyone/@role 永远压制；要 @ 具体某个人，正文写 <@用户ID> 并把 ID 放进 mentions（只有 discord.mentionUsers 白名单里的 ID 会真的 ping）。这是对外发送操作。',
   {
     channel: z.string().describe('频道 ID（数字），必须在白名单服务器里'),
     content: z.string().describe('消息正文，最多 2000 字符，纯文本（Discord markdown 可用）'),
-    replyTo: z.string().optional().describe('要引用/回复的消息 ID（来自 discord_read_messages）'),
+    replyTo: z.string().optional().describe('要引用/回复的消息 ID（来自 discord_read_messages）；回复会 ping 被回复的人'),
+    mentions: z.array(z.string()).optional().describe('要 @ 的用户 ID 列表；只有 config.json 的 discord.mentionUsers 里的 ID 才会真的 ping 到人'),
   },
-  async ({ channel, content, replyTo }) =>
-    run(async () => client.sendMessage(channel, { content, replyTo }))
+  async ({ channel, content, replyTo, mentions }) =>
+    run(async ({ client }) => client.sendMessage(channel, { content, replyTo, mentions }))
 );
 
 server.tool(
@@ -151,9 +161,10 @@ server.tool(
     channel: z.string().describe('频道 ID'),
     messageId: z.string().describe('要编辑的消息 ID（必须是 bot 自己发的）'),
     content: z.string().describe('新的正文，最多 2000 字符'),
+    mentions: z.array(z.string()).optional().describe('要 @ 的用户 ID 列表（同样受白名单限制）'),
   },
-  async ({ channel, messageId, content }) =>
-    run(async () => client.editMessage(channel, messageId, { content }))
+  async ({ channel, messageId, content, mentions }) =>
+    run(async ({ client }) => client.editMessage(channel, messageId, { content, mentions }))
 );
 
 server.tool(
@@ -165,7 +176,7 @@ server.tool(
     emoji: z.string().describe('unicode 表情，如 ✅ 或 👍'),
   },
   async ({ channel, messageId, emoji }) =>
-    run(async () => client.addReaction(channel, messageId, emoji))
+    run(async ({ client }) => client.addReaction(channel, messageId, emoji))
 );
 
 await server.connect(new StdioServerTransport());

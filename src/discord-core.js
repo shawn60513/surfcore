@@ -70,6 +70,8 @@ export function loadDiscordConfig(root) {
     guildIds: normalizeIds(raw.guildIds),
     channelIds: normalizeIds(raw.channelIds),
     allowSend: raw.allowSend !== false,
+    mentionUsers: normalizeIds(raw.mentionUsers),
+    pingOnReply: raw.pingOnReply !== false,
     maxReadLimit: clampInt(raw.maxReadLimit, 50, 1, 100),
     maxContentLength: clampInt(raw.maxContentLength, 2000, 1, 2000),
     requestTimeoutMs: clampInt(raw.requestTimeoutMs, 15000, 3000, 60000),
@@ -164,6 +166,19 @@ export async function discordRequest({
 }
 
 /** 归一化一条 Discord 消息，避免把原始 JSON（含大量空字段）直接灌给模型。 */
+/**
+ * 组装 allowed_mentions：parse 恒为空（压死 @everyone/@role），
+ * users 只放行白名单 discord.mentionUsers 里出现的 ID；回复时可选 ping 被回复者。
+ */
+export function allowedMentionsFor(cfg, mentions, isReply = false) {
+  const allowed = new Set(cfg?.mentionUsers ?? []);
+  const users = [...new Set((Array.isArray(mentions) ? mentions : []).map(String).filter((id) => allowed.has(id)))];
+  const payload = { parse: [] };
+  if (users.length) payload.users = users;
+  if (isReply && cfg?.pingOnReply !== false) payload.replied_user = true;
+  return payload;
+}
+
 export function normalizeMessage(message, { maxContent = 1500 } = {}) {
   const content = String(message?.content ?? '');
   const attachments = Array.isArray(message?.attachments) ? message.attachments : [];
@@ -292,7 +307,7 @@ export function createDiscordClient({ token, cfg, fetchImpl, timeoutMs, sleep, n
       return list.slice().reverse().map((m) => normalizeMessage(m));
     },
 
-    async sendMessage(channelId, { content, replyTo } = {}) {
+    async sendMessage(channelId, { content, replyTo, mentions } = {}) {
       if (!cfg.allowSend) {
         throw new DiscordError('discord.send-disabled', 'discord.allowSend=false，发送已关闭', '在 config.json 把 discord.allowSend 设为 true 再试');
       }
@@ -300,8 +315,8 @@ export function createDiscordClient({ token, cfg, fetchImpl, timeoutMs, sleep, n
       const text = sanitizeMessageContent(content, cfg.maxContentLength);
       const body = {
         content: text,
-        // 压制 @everyone/@role/@user 的推送；文本原样保留，但不会真的 ping 到人。
-        allowed_mentions: { parse: [], replied_user: false },
+        // @everyone / @role 永远压制；只有 discord.mentionUsers 白名单里的 ID 会真的 ping 到人。
+        allowed_mentions: allowedMentionsFor(cfg, mentions, Boolean(replyTo)),
       };
       if (replyTo) body.message_reference = { message_id: String(replyTo), fail_if_not_exists: false };
       const sent = await request('POST', `/channels/${channelId}/messages`, body);
@@ -314,7 +329,7 @@ export function createDiscordClient({ token, cfg, fetchImpl, timeoutMs, sleep, n
       };
     },
 
-    async editMessage(channelId, messageId, { content } = {}) {
+    async editMessage(channelId, messageId, { content, mentions } = {}) {
       await requireAllowedChannel(channelId);
       if (!/^\d{5,25}$/.test(String(messageId ?? ''))) {
         throw new DiscordError('discord.bad-message', `消息 ID 不合法：${messageId}`, '用 discord_read_messages 返回的 id');
@@ -322,7 +337,7 @@ export function createDiscordClient({ token, cfg, fetchImpl, timeoutMs, sleep, n
       const text = sanitizeMessageContent(content, cfg.maxContentLength);
       const updated = await request('PATCH', `/channels/${channelId}/messages/${messageId}`, {
         content: text,
-        allowed_mentions: { parse: [] },
+        allowed_mentions: allowedMentionsFor(cfg, mentions, false),
       });
       return { ok: true, id: String(updated?.id ?? messageId), edited: true };
     },
