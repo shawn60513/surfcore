@@ -17,6 +17,27 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-06 02:20 · 星汐绑定守卫（记忆别再混）
+
+- 覆盖提交：<待回填>
+- 建议版本：**0.9.1 patch**（只加防护，不改既有行为）
+- 改动：
+  - `src/lane-memory.js`：新增 `foreignBindings()` / `pruneForeignBindings()`（路径归一化 + 摘除前备份）；`shouldConsolidate()` 支持 `hour < 0` 关闭。
+  - `src/discord-lane.js`：启动时 `pruneXingxiBindings()` 摘掉星汐「绑定」里指向本档案的外来会话；日志留痕。
+  - `config.json`：`discord.lane.consolidateHour = -1`（夜间整理关掉，拾星当唯一写卡者）；`config.example.json` 保持 23 作默认。
+  - `scripts/test-lane-memory.mjs`：9 组断言（新增外来绑定识别 / 真改文件只摘外来者 / 干净时不动）。
+- case：[2026-11-06-xingxi-binding-guard.md](../cases/2026-11-06-xingxi-binding-guard.md)
+- 验证：`test-lane-memory` 9 组、`test-discord-lane` 9 组、`test-audit` 148/148；真机注入假绑定→重启→日志「已摘掉」且 config 只剩自己人。
+- 回滚：`git revert <commit>`；或把 `consolidateHour` 改回 23（恢复夜间整理）。
+
+```text
+【发布交接】surfcore · 星汐绑定守卫
+改了什么：lane 启动时会检查星汐 config.json 的「绑定」，把指向本档案、但既不是 lane 会话也不是拾星工人的会话摘掉（先备份 config.json），日志留一行。
+为什么：绑错一个会话，拾星就把那整条对话当素材写进她的记忆卡和日记（11-06 早上就混进了开发对话）。
+怎么验：往 config.json 塞一个假绑定→重启 bridge→日志出现「星汐綁定裡混進了別的會話，已摘掉 …」，config 里只剩 lane 会话与拾星工人。
+注意：夜间自动整理（consolidateHour）现在是 -1 关闭，写卡交给拾星；要恢复改回 23。
+```
+
 ### 批次 2026-11-06 02:05 · lane 會自己記（日記 + 每晚整理）
 
 - 覆盖提交：本批提交（feat: lane 寫回記憶）

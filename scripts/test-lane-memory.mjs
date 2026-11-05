@@ -12,8 +12,10 @@ import {
   buildConsolidatePrompt,
   clockStamp,
   dayStamp,
+  foreignBindings,
   memoryLayout,
   parseConsolidate,
+  pruneForeignBindings,
   readDiary,
   shouldConsolidate,
 } from '../src/lane-memory.js';
@@ -112,6 +114,41 @@ assert.equal(shouldConsolidate({ lastConsolidated: '' }, { hour: 23, now: eight 
 assert.equal(shouldConsolidate({ lastConsolidated: '' }, { hour: 23, now: late }), true);
 assert.equal(shouldConsolidate({ lastConsolidated: '2026-11-06' }, { hour: 23, now: late }), false);
 assert.equal(shouldConsolidate({ lastConsolidated: '2026-11-05' }, { hour: 23, now: late }), true);
+assert.equal(shouldConsolidate({ lastConsolidated: '' }, { hour: -1, now: late }), false, 'hour < 0 = 关掉');
+
+// 8) 星汐绑定里混进来的外来会话要能被认出来（拾星会把它们也整理进档案）
+const folder = 'C:/Users/USER/.dsh/xingxi/会话/爱弥丝';
+const bindings = {
+  'session-ef58a582': 'C:/Users/USER/.dsh/xingxi/会话/爱弥丝/',
+  'session-fa913906': 'C:\\Users\\USER\\.dsh\\xingxi\\会话\\爱弥丝',
+  'e03922e8-8f4c': 'C:/Users/USER/.dsh/xingxi/会话/爱弥丝',
+  'other-session': 'C:/Users/USER/.dsh/xingxi/会话/别人',
+};
+assert.deepEqual(
+  foreignBindings(bindings, { folder, sessionId: 'session-ef58a582', workers: ['session-fa913906'] }),
+  ['e03922e8-8f4c'],
+  '自己人（lane + 拾星工人）不算，别的档案也不算',
+);
+assert.deepEqual(foreignBindings(null, { folder }), []);
+assert.deepEqual(foreignBindings(bindings, { folder: '', sessionId: 'x' }), [], '没给档案目录就什么都不算');
+
+// 9) 真去改星汐 config：混进来的会话被摘掉，自己人和别的档案原样留着，且留备份
+const cfgFile = path.join(dir, 'xingxi-config.json');
+fs.writeFileSync(cfgFile, JSON.stringify({ 绑定: {
+  'session-ef58a582': folder,
+  'session-fa913906': folder,
+  'e03922e8-8f4c': folder,
+  'other-session': 'C:/Users/USER/.dsh/xingxi/会话/别人',
+} }, null, 2), 'utf8');
+const pruned = pruneForeignBindings(cfgFile, { folder, sessionId: 'session-ef58a582', workers: ['session-fa913906'] });
+assert.deepEqual(pruned.removed, ['e03922e8-8f4c']);
+assert.equal(fs.existsSync(pruned.backup), true, '摘之前要有备份');
+const left = JSON.parse(fs.readFileSync(cfgFile, 'utf8'))['绑定'];
+assert.equal('e03922e8-8f4c' in left, false, '外来的那个被摘掉');
+assert.equal('session-ef58a582' in left, true);
+assert.equal('session-fa913906' in left, true);
+assert.equal('other-session' in left, true, '别的档案不归我们管');
+assert.deepEqual(pruneForeignBindings(cfgFile, { folder, sessionId: 'session-ef58a582', workers: ['session-fa913906'] }).removed, [], '干净了就什么都不做');
 
 fs.rmSync(dir, { recursive: true, force: true });
-console.log('test-lane-memory: 7 组断言通过');
+console.log('test-lane-memory: 9 组断言通过');

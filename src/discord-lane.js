@@ -13,7 +13,7 @@
 // 限制：只走 REST（沒有 gateway），所以是輪詢（預設 60s），不是即時推送。
 import fs from 'node:fs';
 import path from 'node:path';
-import { appendCardEntries, appendDiary, buildConsolidatePrompt, dayStamp, memoryLayout, parseConsolidate, readDiary, shouldConsolidate } from './lane-memory.js';
+import { appendCardEntries, appendDiary, buildConsolidatePrompt, dayStamp, memoryLayout, parseConsolidate, pruneForeignBindings, readDiary, shouldConsolidate } from './lane-memory.js';
 import { pathToFileURL } from 'node:url';
 
 import { NodeApiClient, unwrap, createTurnCollector, blocksToText } from './dsh-client.js';
@@ -593,6 +593,18 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       .join('\n');
   }
 
+  /** 星汐「绑定」里混进来的外来会话：拾星会把它们也整理进同一个档案，发现就摘掉（先备份）。 */
+  function pruneXingxiBindings() {
+    if (!memory) return { removed: [], backup: '' };
+    const home = process.env.USERPROFILE || process.env.HOME || '';
+    const workers = readJson(path.join(memory.dir, '.拾星', '工人.json'), []);
+    return pruneForeignBindings(path.join(home, '.dsh', 'xingxi', 'config.json'), {
+      folder: memory.dir,
+      sessionId: state.sessionId,
+      workers: Array.isArray(workers) ? workers : [],
+    });
+  }
+
   /**
    * 每天一次：把今天的日记交给她自己挑最多 3 条，再追加进记忆卡。
    * 她只负责「挑 + 标章号」，写档由 appendCardEntries 做（会先备份）。
@@ -778,6 +790,10 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
         ensureApi(baseUrl);
         await ensureDm();
         await ensureSession();
+        const pruned = pruneXingxiBindings();
+        if (pruned.removed.length) {
+          log(`Discord lane：星汐綁定裡混進了別的會話，已摘掉（拾星才不會把他們整理進她的檔案）：${pruned.removed.join(', ')}（備份 ${path.basename(pruned.backup)}）`);
+        }
       } catch (error) {
         log(`Discord lane 初始化失敗：${error?.message ?? error}`);
         return;

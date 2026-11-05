@@ -7,6 +7,26 @@
 
 ---
 
+## 快照：2026-11-06 02:20（记忆卡 + 星汐绑定守卫，未发布）
+
+### 当前事实
+
+- **分支**：`feat/discord-mcp`（基于 `main` v0.8.8 `0deb826`），未合并；本仓没有 `dev` 分支。
+- **测试**：`node scripts/test-audit.mjs` **148/148**；`test-discord-lane` 9 组、`test-lane-memory` 9 组。
+- **运行态**：`bridge.js` PID 44952（runtime node 正斜杠路径），日志含 `Discord lane 啟動 … idle=30min` 与 `記憶卡已載入（164 字）`。
+- **记忆**：星汐档案 `C:/Users/USER/.dsh/xingxi/会话/爱弥丝/记忆卡.md`（3,137 字节，八章）+ `日记/2026-11-04.md`、`2026-11-05.md`；
+  lane 每轮读 300 字摘要（三、五章），每轮写日记；**夜间自动整理已关**（`discord.lane.consolidateHour = -1`），写卡交给拾星。
+- **绑定守卫**：lane 启动会摘掉星汐「绑定」里指向本档案、却不是 lane 会话/拾星工人的条目（先备份 `config.json`）。
+- **现状绑定**：`session-ef58a582-4e3f-4d98-9efd-6a087a4f28c4`（lane）+ `session-fa913906-75dd-467c-9653-7873c2afd154`（拾星工人）。
+
+### 没验证 / 下一步
+
+- 拾星下次自动跑（或手动点）时，确认它只读 lane 会话、不再混入开发对话；跑完看 `记忆卡.md.bak-*` 有没有异常膨胀。
+- 夜间整理若要恢复：`consolidateHour` 改回 23，并先决定「谁写卡」，避免拾星与 nightly 双写。
+- B站 `bili_reply` 仍需绑手机 + 重启 DSH 后做实机 @ 验证。
+
+---
+
 ## 快照：2026-11-05 15:50（Discord 私訊 lane + 回合歸屬修正 + B站 safe MCP，未发布）
 
 ### 当前事实

@@ -174,9 +174,55 @@ function entryCount(list) {
   return list.length;
 }
 
-/** 到了整理时间没有（每天一次，按本地时间的小时数比）。 */
+/** 到了整理时间没有（每天一次，按本地时间的小时数比）。hour < 0 表示关掉。 */
 export function shouldConsolidate(state, { hour = 23, now = new Date() } = {}) {
+  const at = Number(hour);
+  if (!(at >= 0)) return false;
   const today = dayStamp(now);
   if (String(state?.lastConsolidated ?? '') === today) return false;
-  return now.getHours() >= Number(hour);
+  return now.getHours() >= at;
+}
+
+/**
+ * 找出星汐「绑定」里那些不属于这个档案的会话。
+ * 拾星会把每个绑定会话的历史都整理进档案，多绑一个就等于多一条人生线。
+ * workers 是拾星自己开的工人会话，不算外人。
+ */
+export function foreignBindings(bindings, { folder = '', sessionId = '', workers = [] } = {}) {
+  if (!bindings || typeof bindings !== 'object') return [];
+  const mine = String(folder).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const own = new Set([String(sessionId), ...workers.map((id) => String(id))].filter(Boolean));
+  const out = [];
+  for (const [sid, dir] of Object.entries(bindings)) {
+    const target = String(dir ?? '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    if (!mine || target !== mine) continue;
+    if (own.has(String(sid))) continue;
+    out.push(String(sid));
+  }
+  return out;
+}
+
+/**
+ * 把星汐 config.json 里「不属于这个档案」的绑定摘掉（改之前先备份）。
+ * 拾星会把每个绑定会话的历史都整理进档案，混进一条就等于多写一段别人的人生。
+ * 返回 { removed: [会话id], backup: 备份文件路径 }。
+ */
+export function pruneForeignBindings(configFile, { folder = '', sessionId = '', workers = [] } = {}) {
+  const none = { removed: [], backup: '' };
+  if (!configFile) return none;
+  try {
+    const cfg = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+    if (!cfg || typeof cfg !== 'object') return none;
+    const key = Object.keys(cfg).find((k) => k === '绑定' || k === 'bindings');
+    if (!key || !cfg[key] || typeof cfg[key] !== 'object') return none;
+    const removed = foreignBindings(cfg[key], { folder, sessionId, workers });
+    if (!removed.length) return none;
+    const backup = `${configFile}.bak-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    fs.copyFileSync(configFile, backup);
+    for (const sid of removed) delete cfg[key][sid];
+    fs.writeFileSync(configFile, `${JSON.stringify(cfg, null, 2)}${String.fromCharCode(10)}`, 'utf8');
+    return { removed, backup };
+  } catch {
+    return none;
+  }
 }
