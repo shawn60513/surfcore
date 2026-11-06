@@ -32,6 +32,13 @@
 - 驗證：殺進程後 watchdog 拉起、日誌只剩 lane/B站提醒；audit 148/148。
 - 回滾：snowluma.enabled 改 true 並重啟 bridge；Unregister-ScheduledTask surfcore-bridge-logon/surfcore-bridge-watch。
 
+### 批次 2026-11-06 23:30 · 她不再複述提示詞
+
+- 覆盖提交：待补
+- 建议版本：**0.9.1 patch**
+- 改动：`src/discord-lane.js` 的 `replyPrompt()` 改成对话记录写法（元信息一行 + `對方：…` 逐行），并新增 `stripPromptEcho()` 在 `send()` / `queueMirror()` 前剪掉照抄的提示；`scripts/test-discord-lane.mjs` 加第 12 组。
+- 回滚：把 `replyPrompt()` 换回旧的指令式写法、去掉 `stripPromptEcho` 调用。
+
 ### 批次 2026-11-06 23:10 · 让她能看 YouTube / IG Reels
 
 - 覆盖提交：`9a2a399`（feat）+ `f2a360e`（manifest）

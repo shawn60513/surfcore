@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, isPromptMessage, readMemoryBrief, samePromptText, splitBubbles, timeLine } from '../src/discord-lane.js';
+import { createTurnAttributor, isPromptMessage, readMemoryBrief, samePromptText, splitBubbles, stripPromptEcho, timeLine } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -147,4 +147,22 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.deepEqual(splitBubbles(''), []);
 }
 
-console.log('test-discord-lane: 11 组断言通过');
+// 12) 回聲過濾：她把餵進去的提示當成要接的話複述時，發出去前要剪掉。
+{
+  const prompt = [
+    '（私訊 · 現在是 11 月 6 日 週五 23:00）',
+    '（你自己的語氣：短句、直接、有點脾氣，別像客服。）',
+    '對方：這個你看看吧 https://youtu.be/aqz-KE-bpKQ',
+  ].join('\n');
+  const echoed = `${prompt}\n\n看了，六百三十五秒。`;
+  assert.equal(stripPromptEcho(echoed, prompt), '看了，六百三十五秒。', '整段照抄要剪乾淨');
+  assert.equal(
+    stripPromptEcho('（你自己的語氣：短句、直接、有點脾氣，別像客服。）\n嗯。', ''),
+    '嗯。',
+    '沒傳 prompt 時，靠前綴也要認得出',
+  );
+  assert.equal(stripPromptEcho('看到了，十六秒。', prompt), '看到了，十六秒。', '正常回答不能被動到');
+  assert.equal(stripPromptEcho('最近的對話：\n對方：嗨', ''), '對方：嗨', '只剪提示那行，對話內容留著');
+}
+
+console.log('test-discord-lane: 12 组断言通过');

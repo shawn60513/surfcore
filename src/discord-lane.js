@@ -87,6 +87,41 @@ export function timeLine(now = new Date(), lastAt = 0) {
 }
 
 /**
+ * 她偶爾會把餵給她的那段提示當成「要接的話」複述一遍（DSH 裡看得到、Discord 也會收到）。
+ * 發出去前把那些提示行剪掉；只剩提示、沒有正文時回空字串，讓呼叫端保留原文。
+ */
+const PROMPT_ECHO_PREFIXES = [
+  '（私訊',
+  '（Discord 私訊',
+  '（你自己的語氣',
+  '（你記得的事',
+  '（現在是',
+  '（這則裡有連結',
+  '最近的對話：',
+  '對方剛說：',
+  '以上是',
+];
+
+export function stripPromptEcho(text, promptText = '') {
+  let body = String(text ?? '');
+  const prompt = String(promptText ?? '').trim();
+  if (prompt) {
+    const at = body.indexOf(prompt);
+    if (at >= 0) body = `${body.slice(0, at)}${body.slice(at + prompt.length)}`;
+  }
+  const kept = body
+    .split(/\r?\n/)
+    .filter((line) => {
+      const s = line.trim();
+      if (!s) return true;
+      return !PROMPT_ECHO_PREFIXES.some((prefix) => s.startsWith(prefix));
+    })
+    .join('\n')
+    .trim();
+  return kept;
+}
+
+/**
  * 把一段話拆成 2–3 個氣泡：真人打字是一句一句補的，不是一次吐一整段。
  * 有換行就按行拆，沒有就按句末標點拆；剩下的併進最後一個氣泡。
  */
@@ -402,7 +437,8 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
   }
 
   // 把 DSH 那邊開的一輪同步到 Discord（同一段文字 2 分鐘內不重送）
-  function queueMirror(text) {
+  function queueMirror(text, promptText = '') {
+    text = stripPromptEcho(text, promptText) || text;
     if (text === lastMirrorSent.text && Date.now() - lastMirrorSent.at < 120000) return;
     mirrorChain = mirrorChain
       .then(async () => {
@@ -414,7 +450,8 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       .catch((error) => log(`Discord lane：同步 DSH 的回合失敗：${error?.message ?? error}`));
   }
 
-  async function send(text) {
+  async function send(text, promptText = '') {
+    text = stripPromptEcho(text, promptText) || text;
     const channelId = await ensureDm();
     const bubbles = splitBubbles(text);
     if (!bubbles.length) return;
@@ -658,19 +695,14 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       .join('\n');
     const remember = readMemoryBrief(memoryCard);
     const lastAt = Number(history().at(-1)?.at ?? 0);
+    // 寫成「對話紀錄的最後一行是他」，她順著對話回就好；
+    // 以前是「（Discord 私訊）直接給聊天內容…對方剛說：」，那種寫法她會把整段當成要接的話。
     return [
-      '（Discord 私訊）直接給聊天內容，不要解釋你在做什麼。',
+      `（私訊 · ${timeLine(new Date(), lastAt)}${remember ? ` · 你記得：${remember}` : ''}）`,
       TONE_CARD,
-      '',
-      `（${timeLine(new Date(), lastAt)}）`,
-      '',
-      remember ? `（你記得的事：${remember}）` : '',
-      '',
-      log2 ? `最近的對話：\n${log2}` : '',
-      '',
-      `對方剛說：${text}`,
-      '',
       hasLink(text) ? LINK_HINT : '',
+      log2 ? log2 : '',
+      `對方：${text}`,
     ]
       .filter((line) => line !== '')
       .join('\n');
@@ -811,7 +843,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
           pushHistory('bot', reply);
           state.lastUserAt = Date.now();
           state.lastBotAt = Date.now();
-          await send(reply);
+          await send(reply, promptText);
           // 送出成功才推水位：模型或網路失敗時，下一輪會重試同一則，而不是讓它永久消失。
           state.lastMessageId = msg.id;
           save();
@@ -866,7 +898,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
         pushHistory('bot', reply);
         state.lastBotAt = Date.now();
         save();
-        await send(reply);
+        await send(reply, String(promptText));
         log('Discord lane：主動提醒了一句（外部 nudge）');
         return true;
       } finally {
