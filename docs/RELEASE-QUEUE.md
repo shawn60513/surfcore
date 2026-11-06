@@ -19,7 +19,7 @@
 
 ### 批次 2026-11-06 17:15 · lane 自查（魚の記憶 / 心跳 / pid / 称呼）
 
-- 覆盖提交：待回填
+- 覆盖提交：a181722
 - 建议版本：**0.9.1 patch**
 - 改动：
   - `src/lane-memory.js`：新增 `pinFishMemoryOff(configFile, sessionId)`，把 lane 会话写进 `~/.dsh/fish-memory-config.json` 的 `sessions` 并置 `false`，改前备份；已关/文件不存在静默。
