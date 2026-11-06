@@ -33,7 +33,7 @@
 
 | TaskName | 觸發 | 動作 |
 | --- | --- | --- |
-| `surfcore-bridge-logon` | 登入時 | `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File scripts\bridge-watchdog.ps1` |
+| `surfcore-bridge-logon` | 登入時 | `wscript.exe "…\scripts\bridge-watchdog.vbs"`（VBS 內以隱藏視窗起 PowerShell） |
 | `surfcore-bridge-watch` | 每 5 分鐘 | 同上 |
 
 另外兩件小事（同批）：
@@ -47,6 +47,24 @@
 - 重啟後的 `state/bridge.log`（17:36:30）只剩：`QQ 側已關閉（snowluma.enabled=false）…`、`Discord lane 啟動…`、`記憶卡已載入（264 字）`、`B站提醒：已啟動`、`本地控制台已启动`——沒有任何 SnowLuma 行。
 - 計畫任務：`Get-ScheduledTask -TaskName 'surfcore-bridge-*'` 兩個都是 `Ready`。
 - `node --check src/bridge.js`、`test-discord-lane`（11 組）、`test-lane-memory`（11 組）、`test-mcp-discord`、`test-audit`（148/148）全過。
+
+## 補記（17:57）：桌面每 5 分鐘閃一次命令提示字元
+
+**現象**：計畫任務上線後，桌面不定時（其實是每 5 分鐘）閃一個黑框。
+
+**根因**：任務動作直接是 `powershell.exe … -File bridge-watchdog.ps1`。`powershell.exe` 是**主控台程式**，
+Task Scheduler 先為它建立 conhost，`-WindowStyle Hidden` 只是把視窗藏起來——建立的那一下還是看得到。
+
+**修法**：加一層 GUI 宿主 `scripts/bridge-watchdog.vbs`（`WScript.Shell.Run(cmd, 0, False)`，視窗樣式 0 = 完全不建視窗），
+兩個任務的動作改成 `wscript.exe "<路徑>\bridge-watchdog.vbs"`，並把任務的 `Hidden` 設 true。
+另外看門狗改成**先寫「準備拉起」再起進程**，這樣即使進程半路死掉，日誌也知道它動過。
+
+**驗證**：`Start-ScheduledTask surfcore-bridge-watch`（bridge 已被 kill）→ 18 秒後 `state/watchdog.log` 出現
+`準備拉起 bridge（3100 沒在聽）` / `已拉起 PID 35972`，埠重新在聽；任務 `LastTaskResult=0`。
+
+**注意**：VBS 用 ASCII/ANSI 存；`powershell.exe` 一定要寫絕對路徑
+（`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`）——只寫 `powershell.exe` 時，
+在部分宿主環境下 `sh.Run` 會靜默失敗（rc=0 但什麼都沒跑）。
 
 ## 踩過的坑
 

@@ -40,6 +40,7 @@ if (Test-Path $lock) {
 }
 
 # 4) 起 bridge（隱藏視窗、detached）。bridge 自己會寫 state/bridge.log
+Write-WatchLog '準備拉起 bridge（3100 沒在聽）'
 $p = Start-Process -FilePath $node -ArgumentList 'src/bridge.js' -WorkingDirectory $root -WindowStyle Hidden -PassThru
 Start-Sleep -Seconds 4
 if ($p -and -not $p.HasExited) {
