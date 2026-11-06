@@ -232,3 +232,27 @@ export function pruneForeignBindings(configFile, { folder = '', sessionId = '', 
     return none;
   }
 }
+
+/**
+ * 魚の記憶是「按會話開關」的短時記憶，和記憶卡是兩套。lane 只吃記憶卡，
+ * 所以每換一次會話都要把新會話在魚の記憶裡關掉——不然它預設是開的，
+ * 兩套記憶同時往 prompt 裡塞，說法遲早打架。
+ */
+export function pinFishMemoryOff(configFile, sessionId) {
+  const none = { changed: false, backup: '' };
+  if (!configFile || !sessionId) return none;
+  try {
+    if (!fs.existsSync(configFile)) return none;
+    const parsed = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+    const cfg = parsed && typeof parsed === 'object' ? parsed : {};
+    if (!cfg.sessions || typeof cfg.sessions !== 'object') cfg.sessions = {};
+    if (cfg.sessions[sessionId] === false) return none;
+    const backup = `${configFile}.bak-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    fs.copyFileSync(configFile, backup);
+    cfg.sessions[sessionId] = false;
+    fs.writeFileSync(configFile, `${JSON.stringify(cfg, null, 2)}\n`, 'utf8');
+    return { changed: true, backup };
+  } catch {
+    return none;
+  }
+}

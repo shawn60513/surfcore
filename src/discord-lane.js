@@ -13,7 +13,7 @@
 // 限制：只走 REST（沒有 gateway），所以是輪詢（預設 60s），不是即時推送。
 import fs from 'node:fs';
 import path from 'node:path';
-import { appendCardEntries, appendDiary, buildConsolidatePrompt, dayStamp, memoryLayout, parseConsolidate, pruneForeignBindings, readDiary, shouldConsolidate } from './lane-memory.js';
+import { appendCardEntries, appendDiary, buildConsolidatePrompt, dayStamp, memoryLayout, parseConsolidate, pinFishMemoryOff, pruneForeignBindings, readDiary, shouldConsolidate } from './lane-memory.js';
 import { pathToFileURL } from 'node:url';
 
 import { NodeApiClient, unwrap, createTurnCollector, blocksToText } from './dsh-client.js';
@@ -844,6 +844,10 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
         }
         if (pruned.added) {
           log(`Discord lane：新會話已綁回她的星汐檔案（${state.sessionId}）`);
+        }
+        const fish = pinFishMemoryOff(path.join(process.env.USERPROFILE || process.env.HOME || '', '.dsh', 'fish-memory-config.json'), state.sessionId);
+        if (fish.changed) {
+          log('Discord lane：魚の記憶已對這個會話關掉（長期記憶走記憶卡，免得兩套說法打架）');
         }
       } catch (error) {
         log(`Discord lane 初始化失敗：${error?.message ?? error}`);

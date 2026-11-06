@@ -17,6 +17,21 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-06 17:15 · lane 自查（魚の記憶 / 心跳 / pid / 称呼）
+
+- 覆盖提交：待回填
+- 建议版本：**0.9.1 patch**
+- 改动：
+  - `src/lane-memory.js`：新增 `pinFishMemoryOff(configFile, sessionId)`，把 lane 会话写进 `~/.dsh/fish-memory-config.json` 的 `sessions` 并置 `false`，改前备份；已关/文件不存在静默。
+  - `src/discord-lane.js`：`start()` 在星汐绑定守卫之后调用它，换会话自动关掉鱼の记忆，避免和记忆卡两套说法打架。
+  - `src/bili-inbox.js`：空轮每小时最多打一条 `B站提醒：看過一輪，沒有新的…`，把「没人 @」和「轮询死了」分开。
+  - `src/mcp-bili-safe.js`：`bili_reply` 描述补上「账号没绑手机会直接失败（4126021 / 61001）」。
+  - `scripts/test-lane-memory.mjs`：11 组（新增鱼の记忆开关组）。
+  - 使用者设定（不入 repo）：`~/.dsh/feiyu-mood/config.json` 的 `selfName`→愛彌絲、`ownerName`→上午不順、`selfPronoun`→我。
+- case：[2026-11-06-lane-selfcheck.md](../cases/2026-11-06-lane-selfcheck.md)
+- 验证：`test-lane-memory` 11 组、`test-discord-lane` 11 组、`test-bili-inbox`、`test-bili-safe`、`test-audit` 148/148；真机日志 `17:10:49 B站提醒：看過一輪，沒有新的 @ / 回覆（seen 3 條）`。
+- 回滚：`git revert <commit>`；鱼の记忆若想恢复对 lane 开启，手工删掉 `fish-memory-config.json` 的 `sessions` 里那条即可。
+
 ### 批次 2026-11-06 16:25 · 讓她像真人（第一檔：時間感 / 共同經歷 / 分氣泡）
 
 - 覆盖提交：46634c2

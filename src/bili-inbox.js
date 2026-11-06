@@ -62,6 +62,7 @@ export function createBiliInbox({ root, cfg, log = () => {}, lane, client, inter
   const stateFile = path.join(root, 'state', STATE_NAME);
   let timer = null;
   let working = false;
+  let lastQuietLog = 0;
 
   function resolveClient() {
     if (client) return client;
@@ -97,7 +98,14 @@ export function createBiliInbox({ root, cfg, log = () => {}, lane, client, inter
         return { ok: true, fresh: 0, seeded: items.length };
       }
 
-      if (!fresh.length) return { ok: true, fresh: 0 };
+      if (!fresh.length) {
+        const now = Date.now();
+        if (now - lastQuietLog > 3600_000) {
+          lastQuietLog = now;
+          log(`B站提醒：看過一輪，沒有新的 @ / 回覆（seen ${seen.size} 條）`);
+        }
+        return { ok: true, fresh: 0 };
+      }
 
       const ok = await lane.nudge(formatMentionNotice(fresh));
       if (ok) {

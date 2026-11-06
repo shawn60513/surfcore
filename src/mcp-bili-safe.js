@@ -142,7 +142,7 @@ server.tool(
 
 server.tool(
   'bili_reply',
-  '在 B站 视频下发评论，或回复某条评论（对外动作）。传 mentionUid 会自动在正文前加 @对方昵称 —— B站 靠这个发通知。默认被 bili.allowComment 挡着。',
+  '在 B站 视频下发评论，或回复某条评论（对外动作）。传 mentionUid 会自动在正文前加 @对方昵称 —— B站 靠这个发通知。默认被 bili.allowComment 挡着。前提：账号要绑手机号，没绑会直接失败（4126021 / 61001），这时别再重试。',
   {
     bvid: z.string().optional().describe('视频 BV 号（BV 开头）'),
     aid: z.string().optional().describe('视频 aid（数字；和 bvid 二选一）'),

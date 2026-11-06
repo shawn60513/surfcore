@@ -6,19 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {
-  appendCardEntries,
-  appendDiary,
-  buildConsolidatePrompt,
-  clockStamp,
-  dayStamp,
-  foreignBindings,
-  memoryLayout,
-  parseConsolidate,
-  pruneForeignBindings,
-  readDiary,
-  shouldConsolidate,
-} from '../src/lane-memory.js';
+import { appendCardEntries, appendDiary, buildConsolidatePrompt, clockStamp, dayStamp, foreignBindings, memoryLayout, parseConsolidate, pruneForeignBindings, readDiary, shouldConsolidate, pinFishMemoryOff } from '../src/lane-memory.js';
 
 const nl = String.fromCharCode(10);
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lane-memory-'));
@@ -164,5 +152,19 @@ const left2 = JSON.parse(fs.readFileSync(cfgFile2, 'utf8'))['绑定'];
 assert.equal(left2['session-new-lane'], folder, '新会话绑回她的档案');
 assert.equal('session-old-lane' in left2, false);
 
+
+// 11) 魚の記憶：换会话以后新会话要关掉，默认是开的
+const fishFile = path.join(dir, 'fish-memory-config.json');
+fs.writeFileSync(fishFile, JSON.stringify({ sessions: { 'session-old': false }, switchMigrated: true }, null, 2), 'utf8');
+const pinned = pinFishMemoryOff(fishFile, 'session-new-lane');
+assert.equal(pinned.changed, true, '新会话要写进鱼の记忆并关掉');
+assert.equal(fs.existsSync(pinned.backup), true, '改之前要有备份');
+const fishCfg = JSON.parse(fs.readFileSync(fishFile, 'utf8'));
+assert.equal(fishCfg.sessions['session-new-lane'], false, 'lane 会话在鱼の记忆里是关的');
+assert.equal(fishCfg.sessions['session-old'], false, '别的不动');
+assert.equal(fishCfg.switchMigrated, true, '别的顶层键要留着');
+assert.equal(pinFishMemoryOff(fishFile, 'session-new-lane').changed, false, '已经是关的就不重复写');
+assert.equal(pinFishMemoryOff(path.join(dir, 'nope.json'), 'x').changed, false, '文件不存在就安静跳过');
+
 fs.rmSync(dir, { recursive: true, force: true });
-console.log('test-lane-memory: 10 组断言通过');
+console.log('test-lane-memory: 11 组断言通过');
