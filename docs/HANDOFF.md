@@ -18,7 +18,7 @@
 
 ### 下一步
 
-- 把 eat/discord-mcp 推上 origin 並合 dev／發 0.9.1（44+ commits 目前只在本地）。
+- eat/discord-mcp 已推到 fork shawn60513/surfcore（HEAD d8323fe，47 commits）。origin 屬 Mieksido，shawn60513 無寫權限；要進上游需 Mieksido 加協作者或本人登入推。之後合 dev／發 0.9.1。
 - 使用者綁手機後，用 ili_reply 做一次真機 @ 驗證。
 
 ## 快照：2026-11-06 02:20（记忆卡 + 星汐绑定守卫，未发布）
