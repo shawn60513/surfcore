@@ -401,6 +401,19 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     return { channelId, messages };
   }
 
+  // 把 DSH 那邊開的一輪同步到 Discord（同一段文字 2 分鐘內不重送）
+  function queueMirror(text) {
+    if (text === lastMirrorSent.text && Date.now() - lastMirrorSent.at < 120000) return;
+    mirrorChain = mirrorChain
+      .then(async () => {
+        lastMirrorSent = { text, at: Date.now() };
+        pushHistory('bot', text);
+        await send(text);
+        log('Discord lane：DSH 那邊的一輪已同步到 Discord');
+      })
+      .catch((error) => log(`Discord lane：同步 DSH 的回合失敗：${error?.message ?? error}`));
+  }
+
   async function send(text) {
     const channelId = await ensureDm();
     const bubbles = splitBubbles(text);
@@ -458,6 +471,12 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     }
     return api;
   }
+  // DSH 那邊（GUI）開的回合：把她的回覆鏡像到 Discord。
+  // 只在「這一輪不是 lane 自己發起的」時送，不然 lane 那條會送兩次。
+  const mirrorTurns = new Map(); // turn -> { text, own }
+  let lastMirrorSent = { text: '', at: 0 };
+  let mirrorChain = Promise.resolve();
+
   let waiting = null; // 當前等待中的回合
   let collector = null;
   let working = false;
@@ -500,31 +519,52 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       const frame = envelope?.payload;
       if (!frame || frame.type !== 'session/event') continue;
       if (String(frame.sessionId) !== String(state.sessionId)) continue;
-      if (!waiting) continue;
       const event = frame.event;
 
       if (event?.type === 'turn/start') {
         const turn = event.data?.turn ?? null;
-        if (attributor.onTurnStart(turn, Date.now(), waiting.promptText, waiting.promptedAt)) {
+        if (turn != null) mirrorTurns.set(turn, { text: '', own: false });
+        if (waiting && attributor.onTurnStart(turn, Date.now(), waiting.promptText, waiting.promptedAt)) {
           waiting.turn = turn;
           collector = createTurnCollector({ tolerantStart: true });
+          const slot = turn != null ? mirrorTurns.get(turn) : null;
+          if (slot) slot.own = true;
         }
-        if (waiting.turn != null && collector) collector.push(event);
+        if (waiting && waiting.turn != null && collector) collector.push(event);
         continue;
       }
 
-      if (event?.type === 'user/message' && waiting.turn == null) {
+      if (waiting && event?.type === 'user/message' && waiting.turn == null) {
         const text = blocksToText(event.data?.content ?? event.data?.message?.content ?? []);
         const turn = attributor.onUserMessage(text, waiting.promptText, waiting.promptedAt);
         if (turn != null) {
           waiting.turn = turn;
           collector = createTurnCollector({ tolerantStart: true });
+          const slot = mirrorTurns.get(turn);
+          if (slot) slot.own = true;
         } else {
           continue;
         }
       }
 
-      if (!waiting.turn || !collector) continue;
+      const eventTurn = event?.data?.turn ?? null;
+      if (eventTurn != null && mirrorTurns.has(eventTurn)) {
+        const slot = mirrorTurns.get(eventTurn);
+        if (event?.type === 'assistant/message') {
+          const piece = blocksToText(event?.data?.content ?? event?.data?.message?.content ?? []);
+          if (piece) slot.text = slot.text ? slot.text + '\n' + piece : piece;
+        }
+        if (event?.type === 'turn/end') {
+          mirrorTurns.delete(eventTurn);
+          if (!slot.own && String(slot.text).trim()) queueMirror(String(slot.text).trim());
+        }
+      }
+      if (mirrorTurns.size > 200) {
+        const oldest = mirrorTurns.keys().next().value;
+        mirrorTurns.delete(oldest);
+      }
+
+      if (!waiting || !waiting.turn || !collector) continue;
       if (event?.data?.turn != null && event.data.turn !== waiting.turn) continue;
       const ended = collector.push(event);
       if (!ended) continue;

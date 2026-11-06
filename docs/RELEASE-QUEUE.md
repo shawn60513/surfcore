@@ -32,6 +32,16 @@
 - 驗證：殺進程後 watchdog 拉起、日誌只剩 lane/B站提醒；audit 148/148。
 - 回滾：snowluma.enabled 改 true 並重啟 bridge；Unregister-ScheduledTask surfcore-bridge-logon/surfcore-bridge-watch。
 
+### 批次 2026-11-06 18:25 · DSH 那邊的回話同步到 Discord
+
+- 覆盖提交：待补
+- 建议版本：**0.9.1 patch**
+- 改动：
+  - src/discord-lane.js：consumeEvents() 不再「没有 waiting 就整条跳过」；新增 mirrorTurns 槽位与 queueMirror()，非 lane 发起的回合在 	urn/end 时镜像到 Discord 私訊（own 标记避免自己那轮重复发、2 分钟内同文本去重、串行发送避免气泡交错）。
+- case：docs/cases/2026-11-06-lane-mirror-dsh-turns.md
+- 验证：真机在 DSH 里对 lane 会话发消息，Discord 私訊收到回复；bridge.log 出现「DSH 那邊的一輪已同步到 Discord」；test-discord-lane 11 组、audit 148/148。
+- 回滚：删掉 consumeEvents() 里的镜像记账与 queueMirror() 调用即可，认轮逻辑不受影响。
+
 ### 批次 2026-11-06 17:15 · lane 自查（魚の記憶 / 心跳 / pid / 称呼）
 
 - 覆盖提交：a181722
