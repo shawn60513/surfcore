@@ -81,6 +81,14 @@ const TMP = accountBili('tmp')
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const today = () => new Date().toLocaleDateString('sv-SE')
 const UA = { 'user-agent': 'Mozilla/5.0', referer: 'https://www.bilibili.com/' }
+// 2026-11-05：B站 对无 cookie 的 view 接口直接回验证页（HTML）→ 质量核对必然失败。
+// 取元信息必须带登录态，cookie 缺失才退回 UA（宁可失败也不要假成功）。
+const H = (() => {
+  try {
+    const c = JSON.parse(fs.readFileSync(accountBili('credentials.json'), 'utf8'))
+    return { ...UA, cookie: `SESSDATA=${c.sessdata}; bili_jct=${c.bili_jct}; buvid3=${c.buvid3}` }
+  } catch { return UA }
+})()
 
 const RAW = String(opt.text ?? '').trim()
 // 配置里明确为空 = 不加前缀；此时还要清掉模型可能带的旧默认前缀。
@@ -160,7 +168,7 @@ const LIMITS = {
 
 async function viewOf(bvid) {
   try {
-    const j = await (await fetch('https://api.bilibili.com/x/web-interface/view?bvid=' + bvid, { headers: UA })).json()
+    const j = await (await fetch('https://api.bilibili.com/x/web-interface/view?bvid=' + bvid, { headers: H })).json()
     const d = j?.data
     if (!d) return null
     return {
@@ -363,6 +371,14 @@ if (!out) {
 
 // ── 记账 ──────────────────────────────────────────────────────
 const dynId = (out.match(/dyn_id[=: ]+(\d+)/i) ?? out.match(/dynId[=: ]+(\d+)/i) ?? [])[1] ?? ''
+// 2026-11-05：dynamic.mjs 发失败也 exit 0（B站 回 code≠0）—— 这里必须自己判，
+// 否则会把「没发出去」记成「已发」、锁掉今天的名额，还打一个假的 ✓。
+if (!dynId && /\[go\] HTTP \d+\s+code=-?\d+/.test(out)) {
+  const c = (out.match(/\[go\] HTTP \d+\s+code=(-?\d+)/) ?? [])[1]
+  const m = (out.match(/code=-?\d+\s+message=(.*)/) ?? [])[1] ?? ''
+  console.error(`\n✗ 发布失败：code=${c} ${m.trim()} —— 今天这一类没发出去，名额没占`)
+  process.exit(1)
+}
 const at = new Date().toISOString()
 const atText = new Date().toLocaleTimeString('zh-CN', { hour12: false })
 st[KIND] = {
