@@ -15,6 +15,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { appendCardEntries, appendDiary, buildConsolidatePrompt, dayStamp, memoryLayout, parseConsolidate, pinFishMemoryOff, pruneForeignBindings, readDiary, shouldConsolidate } from './lane-memory.js';
 import { pathToFileURL } from 'node:url';
+const FISH_MEMORY_CONFIG = () => path.join(process.env.USERPROFILE || process.env.HOME || '', '.dsh', 'fish-memory-config.json');
+
 
 import { NodeApiClient, unwrap, createTurnCollector, blocksToText } from './dsh-client.js';
 import {
@@ -689,6 +691,9 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
   // ── 主循環 ──────────────────────────────────────────────────────────────
 
   async function tick() {
+    // 每轮再钉一次：插件在「继承记忆」或复制记忆时会把这个会话重新打开
+    const pinned = pinFishMemoryOff(FISH_MEMORY_CONFIG(), state.sessionId);
+    if (pinned.changed) log('Discord lane：魚の記憶又被打開了，已再關掉');
     if (working) return;
     working = true;
     try {
@@ -845,7 +850,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
         if (pruned.added) {
           log(`Discord lane：新會話已綁回她的星汐檔案（${state.sessionId}）`);
         }
-        const fish = pinFishMemoryOff(path.join(process.env.USERPROFILE || process.env.HOME || '', '.dsh', 'fish-memory-config.json'), state.sessionId);
+        const fish = pinFishMemoryOff(FISH_MEMORY_CONFIG(), state.sessionId);
         if (fish.changed) {
           log('Discord lane：魚の記憶已對這個會話關掉（長期記憶走記憶卡，免得兩套說法打架）');
         }

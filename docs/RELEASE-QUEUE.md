@@ -23,7 +23,7 @@
 - 建议版本：**0.9.1 patch**
 - 改动：
   - `src/lane-memory.js`：新增 `pinFishMemoryOff(configFile, sessionId)`，把 lane 会话写进 `~/.dsh/fish-memory-config.json` 的 `sessions` 并置 `false`，改前备份；已关/文件不存在静默。
-  - `src/discord-lane.js`：`start()` 在星汐绑定守卫之后调用它，换会话自动关掉鱼の记忆，避免和记忆卡两套说法打架。
+  - `src/discord-lane.js`：`start()` 与**每轮 `tick()` 开头**都调用它（fish-memory 会在「继承记忆」时把开关自动打开，只在 start 钉会被盖掉），换会话自动关掉鱼の记忆，避免和记忆卡两套说法打架。
   - `src/bili-inbox.js`：空轮每小时最多打一条 `B站提醒：看過一輪，沒有新的…`，把「没人 @」和「轮询死了」分开。
   - `src/mcp-bili-safe.js`：`bili_reply` 描述补上「账号没绑手机会直接失败（4126021 / 61001）」。
   - `scripts/test-lane-memory.mjs`：11 组（新增鱼の记忆开关组）。
