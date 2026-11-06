@@ -84,4 +84,5 @@ Task Scheduler 先為它建立 conhost，`-WindowStyle Hidden` 只是把視窗�
 - 修法：
   1. VBS 只留 ASCII 註解，並加 On Error Resume Next：任何失敗只寫 state/watchdog-vbs.log，**絕不彈框**。
   2. 真正的檢查搬到 scripts/bridge-watchdog.mjs（純 Node）：連 3100 判斷活著、5 秒冷卻、清殘留鎖、spawn(process.execPath, ['src/bridge.js'], { detached: true, windowsHide: true, stdio: 'ignore' })；不再起 PowerShell，也就沒有 conhost。
-- 驗證：cscript //nologo scripts/bridge-watchdog.vbs 無輸出；Get-Process 每 100ms 掃 9 秒確認 isible_windows=none；安靜時 95ms 結束；殺掉 bridge 後 VBS 拉回新 PID（22:29:09 起），全程沒有視窗。
+- 注意：`scripts/bridge-watchdog.ps1` 保留作回滾用，兩個計畫任務都已不再呼叫它。
+- 驗證：`cscript //nologo scripts/bridge-watchdog.vbs` 無輸出（錯誤只會落在 `state/watchdog-vbs.log`）；用 `Get-Process` 每 100ms 掃 9 秒，`visible_windows=none`；安靜路徑 95ms 結束；殺掉 bridge 後 VBS 拉回新 PID（22:29:09 起），全程沒有視窗。

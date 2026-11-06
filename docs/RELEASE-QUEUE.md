@@ -34,7 +34,7 @@
 
 ### 批次 2026-11-06 22:35 · 看門狗改純 Node，不再彈框/搶焦點
 
-- 覆盖提交：待补
+- 覆盖提交：a7315ce（+ 本批 manifest 提交）
 - 建议版本：**0.9.1 patch**
 - 改动：
   - scripts/bridge-watchdog.mjs（新）：纯 Node 看门狗——连 3100 判断存活、5 秒冷却、清残留锁、detached+windowsHide 拉起 bridge。安静时约 95ms。
