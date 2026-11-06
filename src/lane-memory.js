@@ -205,10 +205,11 @@ export function foreignBindings(bindings, { folder = '', sessionId = '', workers
 /**
  * 把星汐 config.json 里「不属于这个档案」的绑定摘掉（改之前先备份）。
  * 拾星会把每个绑定会话的历史都整理进档案，混进一条就等于多写一段别人的人生。
- * 返回 { removed: [会话id], backup: 备份文件路径 }。
+ * 顺手把「当前这个会话」绑回去——换过会话以后不绑，档案就悄悄停止生长了。
+ * 返回 { removed: [会话id], added: 是否补绑了当前会话, backup: 备份文件路径 }。
  */
 export function pruneForeignBindings(configFile, { folder = '', sessionId = '', workers = [] } = {}) {
-  const none = { removed: [], backup: '' };
+  const none = { removed: [], added: false, backup: '' };
   if (!configFile) return none;
   try {
     const cfg = JSON.parse(fs.readFileSync(configFile, 'utf8'));
@@ -216,12 +217,17 @@ export function pruneForeignBindings(configFile, { folder = '', sessionId = '', 
     const key = Object.keys(cfg).find((k) => k === '绑定' || k === 'bindings');
     if (!key || !cfg[key] || typeof cfg[key] !== 'object') return none;
     const removed = foreignBindings(cfg[key], { folder, sessionId, workers });
-    if (!removed.length) return none;
+    // 换过会话之后，新会话也得绑上，否则档案就停止长了（而且没人会报错）。
+    const mine = String(folder).replace(/\\/g, '/').replace(/\/+$/, '');
+    const already = Boolean(mine) && Boolean(sessionId) && String(cfg[key][sessionId] ?? '').replace(/\\/g, '/').replace(/\/+$/, '') === mine;
+    const added = Boolean(mine) && Boolean(sessionId) && !already;
+    if (!removed.length && !added) return none;
     const backup = `${configFile}.bak-${new Date().toISOString().replace(/[:.]/g, '-')}`;
     fs.copyFileSync(configFile, backup);
     for (const sid of removed) delete cfg[key][sid];
+    if (added) cfg[key][sessionId] = folder;
     fs.writeFileSync(configFile, `${JSON.stringify(cfg, null, 2)}${String.fromCharCode(10)}`, 'utf8');
-    return { removed, backup };
+    return { removed, added, backup };
   } catch {
     return none;
   }

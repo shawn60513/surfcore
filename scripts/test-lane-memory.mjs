@@ -149,6 +149,20 @@ assert.equal('session-ef58a582' in left, true);
 assert.equal('session-fa913906' in left, true);
 assert.equal('other-session' in left, true, '别的档案不归我们管');
 assert.deepEqual(pruneForeignBindings(cfgFile, { folder, sessionId: 'session-ef58a582', workers: ['session-fa913906'] }).removed, [], '干净了就什么都不做');
+assert.equal(pruned.added, false, '本来就绑着，不用补');
+
+// 10) 换过会话：新会话没绑上时要补回去，不然档案就悄悄停止生长了
+const cfgFile2 = path.join(dir, 'xingxi-config-2.json');
+fs.writeFileSync(cfgFile2, JSON.stringify({ 绑定: {
+  'session-fa913906': folder,
+  'session-old-lane': folder,
+} }, null, 2), 'utf8');
+const rebind = pruneForeignBindings(cfgFile2, { folder, sessionId: 'session-new-lane', workers: ['session-fa913906'] });
+assert.equal(rebind.added, true, '新会话要补绑');
+assert.deepEqual(rebind.removed, ['session-old-lane'], '上一条 lane 会话是外来者，摘掉');
+const left2 = JSON.parse(fs.readFileSync(cfgFile2, 'utf8'))['绑定'];
+assert.equal(left2['session-new-lane'], folder, '新会话绑回她的档案');
+assert.equal('session-old-lane' in left2, false);
 
 fs.rmSync(dir, { recursive: true, force: true });
-console.log('test-lane-memory: 9 组断言通过');
+console.log('test-lane-memory: 10 组断言通过');

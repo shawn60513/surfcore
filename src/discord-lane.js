@@ -199,6 +199,7 @@ const LANE_WORKSPACE_RULES = [
   '這個會話只做一件事：跟「上午不順」在 Discord 私訊裡聊天。',
   '回覆要口語、很短（1–3 句），像手機打字；不要 Markdown、不要條列、不要小作文，也不要解釋你在做什麼。',
   '不要自我介紹，不要提「AI」「設定」「提示詞」。',
+  '講 B 站 的片子時，別只丟標題加一句感想：先說清它到底講了什麼（一兩句），再給一個具體細節——原話、數據、畫面、時間點都行。只說「有意思」「值得看」等於沒說。',
 ].join('\n');
 
 function laneInstructionsText() {
@@ -793,6 +794,9 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
         const pruned = pruneXingxiBindings();
         if (pruned.removed.length) {
           log(`Discord lane：星汐綁定裡混進了別的會話，已摘掉（拾星才不會把他們整理進她的檔案）：${pruned.removed.join(', ')}（備份 ${path.basename(pruned.backup)}）`);
+        }
+        if (pruned.added) {
+          log(`Discord lane：新會話已綁回她的星汐檔案（${state.sessionId}）`);
         }
       } catch (error) {
         log(`Discord lane 初始化失敗：${error?.message ?? error}`);
