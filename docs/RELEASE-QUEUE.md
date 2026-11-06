@@ -32,6 +32,13 @@
 - 驗證：殺進程後 watchdog 拉起、日誌只剩 lane/B站提醒；audit 148/148。
 - 回滾：snowluma.enabled 改 true 並重啟 bridge；Unregister-ScheduledTask surfcore-bridge-logon/surfcore-bridge-watch。
 
+### 批次 2026-11-06 23:35 · 把人设钉回每一轮
+
+- 覆盖提交：待补
+- 建议版本：**0.9.1 patch**
+- 改动：`LANE_WORKSPACE_RULES` 加「照他的字走（繁體）」「你不是顧問：別給健康建議/別講道理」；`TONE_CARD` 改成 60 字身份卡（愛彌斯/粉髮金瞳/《紙飛機》/短而皮/繁體）；换新 lane 会话让 AGENTS.md 生效。
+- 回滚：`TONE_CARD` 还原成语气卡、删掉两条工作区规则、再换一次会话。
+
 ### 批次 2026-11-06 23:30 · 她不再複述提示詞
 
 - 覆盖提交：待补
