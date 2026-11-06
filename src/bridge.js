@@ -130,6 +130,17 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
+
+// QQ 側總開關：config.json 的 snowluma.enabled === false 時，整條 QQ 管線（WS 連線、
+// 發送、token 自愈）都不啟動。Discord lane 與 B站 提醒跑在同一個進程裡，不受影響。
+const QQ_DISABLED = (() => {
+  try {
+    const c = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8'));
+    return c?.snowluma?.enabled === false;
+  } catch {
+    return false;
+  }
+})();
 const STATE_DIR = path.join(ROOT, 'state');
 const STATE_FILE = path.join(STATE_DIR, 'sessions.json');
 const ROLE_STATE_FILE = path.join(STATE_DIR, 'current-role.json');
@@ -1996,6 +2007,7 @@ async function main() {
   // 从 SnowLuma OneBot 拉取 QQ 账号收藏表情（fetch_custom_face_detail），并合并进本地库。
   // force=true 时忽略 TTL 强制刷新；失败时返回 null（调用方决定是否使用缓存）。
   async function syncStickerLibrary(force = false) {
+    if (QQ_DISABLED) return;
     if (cfg.socialV2?.sticker?.enabled === false) return null;
     const rawTtl = Number(cfg.socialV2?.sticker?.syncTtlMs);
     const ttl = Number.isFinite(rawTtl) ? Math.max(0, rawTtl) : 60000;
@@ -4324,6 +4336,7 @@ async function main() {
 
   /** 边沿触发地告警/恢复，避免每轮探测都刷一行日志。 */
   function reportSnowlumaHealth() {
+    if (QQ_DISABLED) return;
     const snap = snowlumaHealthSnapshot();
     if (snap.degraded && !snowlumaHealth.degraded) {
       snowlumaHealth.degraded = true;
@@ -4346,6 +4359,7 @@ async function main() {
    *    这里只是**兜底轮询**：主路径是每 30 秒一次的心跳（免费，见 onEvent）。
    */
   async function pollSnowlumaStatus() {
+    if (QQ_DISABLED) return;
     const httpUrl = String(cfg.snowluma?.httpUrl || 'http://127.0.0.1:3000').replace(/\/+$/, '');
     try {
       const res = await fetch(`${httpUrl}/get_status`, {
@@ -12722,6 +12736,7 @@ async function main() {
   }
 
   function startPurposeLoop() {
+    if (QQ_DISABLED) return;
     if (purposeTimer) return;
     ensurePurposeSchedule(purposeState, { now: Date.now(), config: cfg.purpose });
     savePurposeState();
@@ -13629,6 +13644,7 @@ async function main() {
   }
 
   function startProactiveScheduler() {
+    if (QQ_DISABLED) return;
     if (cfg.chat?.proactive?.enabled === false) return;
     setInterval(() => { checkProactiveAt().catch(() => {}); }, 5 * 60 * 1000);
     log(`[搭话] 已启动：每群每小时最多一次主动 @（至少 ${cfg.chat?.proactive?.minMessages ?? 10} 条上下文）`);
@@ -17170,6 +17186,7 @@ async function main() {
   }
 
   bot.on('close', (info) => {
+    if (QQ_DISABLED) return;
     snowlumaHealth.connected = false;
     log(`SnowLuma 连接断开（code=${info?.code ?? '?'}），重连中…`);
     // 1006 在每次启动/短暂抖动都会出现，重连通常几百毫秒；先给 15 秒观察窗口，
@@ -17188,6 +17205,7 @@ async function main() {
     void healTokenIfStale(`close code=${info?.code ?? '?'}`);
   });
   bot.on('error', (error) => {
+    if (QQ_DISABLED) return;
     // SDK 在 WS 升级被拒（401 / 建连失败）时可能**只 emit error、不 emit close**，
     // 于是挂在 close 上的 token 自愈永远不会触发 —— 表现为「桥接活着但收发全废」，
     // 用户只能靠手工改 token 绕过去（issue #19）。这里同样尝试一次（内部有 10s 节流）。
@@ -17199,7 +17217,9 @@ async function main() {
   });
 
   // SnowLuma 尚未就绪时不阻塞桥接启动：SDK 自带后台重连，DSH 侧照常连接。
-  bot.connect().catch((error) => {
+  if (QQ_DISABLED) {
+    log('QQ 側已關閉（snowluma.enabled=false）：不連 SnowLuma、也不會往 QQ 發任何東西');
+  } else bot.connect().catch((error) => {
     // 说明为什么"第一次连不上"在这里几乎是**必然**的，避免用户把它当成故障：
     // SnowLuma 的 **HTTP token（默认 3000）与 WS token（默认 3001）是两个不同的值**
     // （实测：同一个账号，两者不同；config.json 只能存一个，存的是 HTTP 那个）。

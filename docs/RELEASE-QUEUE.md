@@ -17,6 +17,21 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-06 17:40 · 自啟、看門狗、關 QQ、語氣兜底
+
+- 覆盖提交：（本次）
+- 建议版本：**0.9.1 patch**
+- 改动：
+  - scripts/bridge-watchdog.ps1（新）：3100 沒在聽就拉起 bridge；殘留鎖會先清；日誌 state/watchdog.log。
+  - 計畫任務 surfcore-bridge-logon（登入）＋ surfcore-bridge-watch（每 5 分鐘）。
+  - src/bridge.js：QQ_DISABLED 總開關（snowluma.enabled=false）——不連 SnowLuma、不發 QQ、關閉 close/error 的自愈與日誌、停掉目的引擎/搭話/表情同步三個 QQ 定時器。
+  - config.example.json：snowluma 段補 enabled: true。
+  - src/discord-lane.js：TONE_CARD 語氣兜底（AGENTS.md 壓縮後不重注入時用）。
+  - 本機 ~/.dsh/speak-up-config.json：總開關關、目標會話清空（它原本指向已棄用會話）。
+- case：docs/cases/2026-11-06-bridge-autostart.md
+- 驗證：殺進程後 watchdog 拉起、日誌只剩 lane/B站提醒；audit 148/148。
+- 回滾：snowluma.enabled 改 true 並重啟 bridge；Unregister-ScheduledTask surfcore-bridge-logon/surfcore-bridge-watch。
+
 ### 批次 2026-11-06 17:15 · lane 自查（魚の記憶 / 心跳 / pid / 称呼）
 
 - 覆盖提交：a181722

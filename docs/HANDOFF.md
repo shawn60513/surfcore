@@ -7,6 +7,20 @@
 
 ---
 
+## 快照：2026-11-06 17:40（自啟＋看門狗＋關 QQ，未發布）
+
+### 當前事實
+
+- bridge 由 scripts/bridge-watchdog.ps1 看管：登入跑一次、之後每 5 分鐘一次（計畫任務 surfcore-bridge-logon / surfcore-bridge-watch）。
+- config.json 的 snowluma.enabled = false → QQ 整半邊關閉（不連 SnowLuma、不發 QQ、不跑目的引擎/搭話/表情同步）。日誌不再刷 1006。
+- lane 照常：Discord lane 啟動、記憶卡已載入、B站提醒：已啟動。
+- ~/.dsh/speak-up-config.json 總開關關、目標會話空。
+
+### 下一步
+
+- 把 eat/discord-mcp 推上 origin 並合 dev／發 0.9.1（44+ commits 目前只在本地）。
+- 使用者綁手機後，用 ili_reply 做一次真機 @ 驗證。
+
 ## 快照：2026-11-06 02:20（记忆卡 + 星汐绑定守卫，未发布）
 
 ### 当前事实

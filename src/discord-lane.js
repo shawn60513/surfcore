@@ -35,6 +35,9 @@ const DEFAULT_POLL_MS = 60_000;
 const DEFAULT_IDLE_MINUTES = 120;
 const TURN_TIMEOUT_MS = 180_000;
 const HISTORY_LIMIT = 24;
+// 兜底語氣卡：AGENTS.md 只在會話開頭注入，DSH 壓縮之後不保證會再注入。
+// 每輪帶一句（約 25 token）比「她慢慢退回客服腔」便宜得多。
+const TONE_CARD = '（你自己的語氣：短句、直接、有點脾氣，別像客服。）';
 // 图片：最多 4 张、合计 8MB、单张抓取 15 秒——Discord 的 CDN 偶尔会慢，但不该拖死整轮。
 const MAX_IMAGE_COUNT = 4;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -610,6 +613,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     const lastAt = Number(history().at(-1)?.at ?? 0);
     return [
       '（Discord 私訊）直接給聊天內容，不要解釋你在做什麼。',
+      TONE_CARD,
       '',
       `（${timeLine(new Date(), lastAt)}）`,
       '',
@@ -630,6 +634,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     const remember = readMemoryBrief(memoryCard);
     return [
       '（Discord 私訊）你剛好在想對方，想主動私訊找他講一句話。',
+      TONE_CARD,
       '給一句自然的開場（1–2 句），可以延續最近聊過的事，也可以只是想到他。',
       '如果現在完全不適合開口（他在忙、時候不對、你沒話說），就只回一個字：跳過。',
       '',
