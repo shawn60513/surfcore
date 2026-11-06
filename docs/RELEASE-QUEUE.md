@@ -34,7 +34,7 @@
 
 ### 批次 2026-11-06 18:25 · DSH 那邊的回話同步到 Discord
 
-- 覆盖提交：待补
+- 覆盖提交：38c77e7（+ 本批 manifest 提交）
 - 建议版本：**0.9.1 patch**
 - 改动：
   - src/discord-lane.js：consumeEvents() 不再「没有 waiting 就整条跳过」；新增 mirrorTurns 槽位与 queueMirror()，非 lane 发起的回合在 	urn/end 时镜像到 Discord 私訊（own 标记避免自己那轮重复发、2 分钟内同文本去重、串行发送避免气泡交错）。
