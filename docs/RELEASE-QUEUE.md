@@ -32,6 +32,18 @@
 - 驗證：殺進程後 watchdog 拉起、日誌只剩 lane/B站提醒；audit 148/148。
 - 回滾：snowluma.enabled 改 true 並重啟 bridge；Unregister-ScheduledTask surfcore-bridge-logon/surfcore-bridge-watch。
 
+### 批次 2026-11-06 22:35 · 看門狗改純 Node，不再彈框/搶焦點
+
+- 覆盖提交：待补
+- 建议版本：**0.9.1 patch**
+- 改动：
+  - scripts/bridge-watchdog.mjs（新）：纯 Node 看门狗——连 3100 判断存活、5 秒冷却、清残留锁、detached+windowsHide 拉起 bridge。安静时约 95ms。
+  - scripts/bridge-watchdog.vbs：只留 ASCII 注释＋On Error Resume Next（UTF-8 中文注释会被 WSH 按 GBK 解码、吞掉换行，导致 so 未定义并弹模态框——就是这次打断看片的元凶）；改为直接调 node，不再起 PowerShell。
+  - docs/cases/2026-11-06-bridge-autostart.md：补记「看门狗自己弹框」一节。
+- case：docs/cases/2026-11-06-bridge-autostart.md
+- 验证：cscript 无报错、窗口轮询 isible_windows=none、安静路径 95ms、杀掉 bridge 后 4 秒拉回。
+- 回滚：把任务动作从 wscript 改回 powershell，或恢复 ps1 版本。
+
 ### 批次 2026-11-06 18:25 · DSH 那邊的回話同步到 Discord
 
 - 覆盖提交：38c77e7（+ 本批 manifest 提交）

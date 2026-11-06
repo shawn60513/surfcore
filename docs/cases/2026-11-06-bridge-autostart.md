@@ -76,3 +76,12 @@ Task Scheduler 先為它建立 conhost，`-WindowStyle Hidden` 只是把視窗�
 
 - 關掉 QQ 之後：`dsh-feiyu-mood` / 心情、`fish-memory`、B站 提醒、lane 都不受影響（它們不經過 `sendToQQ`）。
 - 想開回來：`config.json` 的 `snowluma.enabled` 改 `true`，重啟 bridge（或等看門狗下一輪）。
+
+## 補記（22:28）：看門狗自己彈了一個錯誤視窗，還把看片打斷
+
+- 現象：桌面跳出 Windows Script Host 對話框「變數未定義: 'fso'」（行 3，程式碼 800A01F4）。
+- 根因：VBS 用 UTF-8 存、裡面寫了中文註解 → WSH 按 ANSI(GBK) 解碼，雙位元組把換行吃掉 → 行號錯位、Dim 那行被併進註解 → Option Explicit 下 so 未定義 → **模態對話框**（搶焦點，全螢幕播放器會因此暫停）。
+- 修法：
+  1. VBS 只留 ASCII 註解，並加 On Error Resume Next：任何失敗只寫 state/watchdog-vbs.log，**絕不彈框**。
+  2. 真正的檢查搬到 scripts/bridge-watchdog.mjs（純 Node）：連 3100 判斷活著、5 秒冷卻、清殘留鎖、spawn(process.execPath, ['src/bridge.js'], { detached: true, windowsHide: true, stdio: 'ignore' })；不再起 PowerShell，也就沒有 conhost。
+- 驗證：cscript //nologo scripts/bridge-watchdog.vbs 無輸出；Get-Process 每 100ms 掃 9 秒確認 isible_windows=none；安靜時 95ms 結束；殺掉 bridge 後 VBS 拉回新 PID（22:29:09 起），全程沒有視窗。
