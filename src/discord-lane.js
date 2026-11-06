@@ -61,6 +61,43 @@ function clampMs(value, fallback, min, max) {
   return Math.min(max, Math.max(min, Math.trunc(n)));
 }
 
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Math.trunc(ms))));
+
+const WEEKDAYS = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+
+/**
+ * 「現在是 11 月 6 日 週四 16:20（你們上次說話是 3 小時前）」。
+ * 她得知道現在幾點，才會說「這麼晚還不睡」而不是永遠同一種語氣。
+ */
+export function timeLine(now = new Date(), lastAt = 0) {
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const base = `現在是 ${now.getMonth() + 1} 月 ${now.getDate()} 日 ${WEEKDAYS[now.getDay()]} ${hh}:${mm}`;
+  const gap = lastAt ? now.getTime() - Number(lastAt) : 0;
+  if (!Number.isFinite(gap) || gap <= 0) return base;
+  const mins = Math.floor(gap / 60000);
+  if (mins < 3) return base;
+  const ago = mins < 60 ? `${mins} 分鐘` : mins < 1440 ? `${Math.floor(mins / 60)} 小時` : `${Math.floor(mins / 1440)} 天`;
+  return `${base}（你們上次說話是 ${ago}前）`;
+}
+
+/**
+ * 把一段話拆成 2–3 個氣泡：真人打字是一句一句補的，不是一次吐一整段。
+ * 有換行就按行拆，沒有就按句末標點拆；剩下的併進最後一個氣泡。
+ */
+export function splitBubbles(text, max = 3) {
+  const raw = String(text ?? '').trim();
+  if (!raw || max <= 1) return raw ? [raw] : [];
+  const rows = raw.split(String.fromCharCode(10)).map((s) => s.trim()).filter(Boolean);
+  const units = rows.length > 1
+    ? rows
+    : raw.split(/(?<=[。！？!?～~…])/).map((s) => s.trim()).filter(Boolean);
+  if (units.length <= 1) return [raw];
+  const out = units.slice(0, max - 1);
+  out.push(units.slice(max - 1).join(''));
+  return out.map((s) => s.trim()).filter(Boolean);
+}
+
 /** Discord 單條訊息上限 2000；超長按段落切，避免把一句話斬斷。 */
 function splitContent(text, max = 1900) {
   const clean = String(text ?? '').trim();
@@ -222,8 +259,9 @@ function syncWorkspaceInstructions(root) {
   return file;
 }
 
-const MEMORY_BRIEF_LIMIT = 300;
-const MEMORY_BRIEF_CHAPTERS = new Set(['三', '五']);
+const MEMORY_BRIEF_LIMIT = 500;
+// 「六｜難忘的時刻」也要進來：她記得共同經歷，才不會只記得「你是誰」。
+const MEMORY_BRIEF_CHAPTERS = new Set(['三', '五', '六']);
 
 /**
  * 從星汐記憶卡裡取一段「記得的事」：只要「對方是誰」「我們的約定」兩章，
@@ -360,18 +398,22 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
 
   async function send(text) {
     const channelId = await ensureDm();
-    const parts = splitContent(text, 1900).filter(Boolean);
-    if (!parts.length) return;
-    for (const part of parts) {
-      // 正文里的 <@id> 只有落在 discord.mentionUsers 白名单里才会真的 ping；
-      // @everyone/@role 依旧压制（parse 恒为空）。
-      const mentions = [...String(part).matchAll(/<@!?(\d+)>/g)].map((m) => m[1]);
-      await discordRequest({
-        token,
-        method: 'POST',
-        route: `/channels/${channelId}/messages`,
-        body: { content: part, allowed_mentions: allowedMentionsFor(discordCfg, mentions, false) },
-      });
+    const bubbles = splitBubbles(text);
+    if (!bubbles.length) return;
+    for (let i = 0; i < bubbles.length; i += 1) {
+      // 分條發：中間停一下再補下一句，比一整段更像人在打字。
+      if (i > 0) await pause(900 + Math.floor(Math.random() * 1800));
+      for (const part of splitContent(bubbles[i], 1900).filter(Boolean)) {
+        // 正文里的 <@id> 只有落在 discord.mentionUsers 白名单里才会真的 ping；
+        // @everyone/@role 依旧压制（parse 恒为空）。
+        const mentions = [...String(part).matchAll(/<@!?(\d+)>/g)].map((m) => m[1]);
+        await discordRequest({
+          token,
+          method: 'POST',
+          route: `/channels/${channelId}/messages`,
+          body: { content: part, allowed_mentions: allowedMentionsFor(discordCfg, mentions, false) },
+        });
+      }
     }
   }
 
@@ -563,8 +605,11 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       .map((m) => `${m.role === 'user' ? '對方' : '你'}：${m.content}`)
       .join('\n');
     const remember = readMemoryBrief(memoryCard);
+    const lastAt = Number(history().at(-1)?.at ?? 0);
     return [
       '（Discord 私訊）直接給聊天內容，不要解釋你在做什麼。',
+      '',
+      `（${timeLine(new Date(), lastAt)}）`,
       '',
       remember ? `（你記得的事：${remember}）` : '',
       '',
@@ -584,7 +629,9 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     return [
       '（Discord 私訊）你剛好在想對方，想主動私訊找他講一句話。',
       '給一句自然的開場（1–2 句），可以延續最近聊過的事，也可以只是想到他。',
-      '如果現在完全不適合開口，就只回一個字：跳過。',
+      '如果現在完全不適合開口（他在忙、時候不對、你沒話說），就只回一個字：跳過。',
+      '',
+      `（${timeLine(new Date(), Number(history().at(-1)?.at ?? 0))}）`,
       '',
       remember ? `（你記得的事：${remember}）` : '',
       '',

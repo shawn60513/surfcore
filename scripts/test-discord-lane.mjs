@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, isPromptMessage, readMemoryBrief, samePromptText } from '../src/discord-lane.js';
+import { createTurnAttributor, isPromptMessage, readMemoryBrief, samePromptText, splitBubbles, timeLine } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -104,16 +104,47 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
     "- 这条不该出现。",
     "## 五｜我们的约定",
     "- 睡得晚要说晚安。",
+    "## 六｜难忘的时刻",
+    "- 一起去过海边。",
+    "## 七｜怎么跟对方相处",
+    "- 这条也不该出现。",
   ].join(nl), "utf8");
   const brief = readMemoryBrief(card);
   assert.equal(brief.includes("上午不顺"), true);
   assert.equal(brief.includes("义大利麵"), true);
   assert.equal(brief.includes("晚安"), true);
+  assert.equal(brief.includes("一起去过海边"), true, "第六章（共同经历）要进来");
   assert.equal(brief.includes("不该出现"), false, "第四章不该混进来");
   assert.equal(brief.includes("我叫爱弥丝"), false, "第一章不该混进来");
+  assert.equal(brief.includes("这条也不该出现"), false, "第七章不该混进来");
   assert.equal(readMemoryBrief(path.join(dir, "没有这个文件.md")), "");
   assert.equal(readMemoryBrief(""), "");
   fsx.rmSync(dir, { recursive: true, force: true });
 }
 
-console.log('test-discord-lane: 9 组断言通过');
+// 10) 現在時間與相處間隔：她要知道現在幾點、距離上次說話多久。
+{
+  const at = new Date(2026, 10, 6, 16, 20, 0); // 2026-11-06 16:20（週五）
+  assert.equal(timeLine(at), '現在是 11 月 6 日 週五 16:20');
+  assert.equal(
+    timeLine(at, at.getTime() - 3 * 3600 * 1000),
+    '現在是 11 月 6 日 週五 16:20（你們上次說話是 3 小時前）',
+  );
+  assert.equal(
+    timeLine(at, at.getTime() - 20 * 60 * 1000),
+    '現在是 11 月 6 日 週五 16:20（你們上次說話是 20 分鐘前）',
+  );
+  assert.equal(timeLine(at, at.getTime() - 60000), '現在是 11 月 6 日 週五 16:20', '一分鐘前不用提');
+  assert.equal(timeLine(at, 0), '現在是 11 月 6 日 週五 16:20', '没有历史就不提间隔');
+}
+
+// 11) 分氣泡：一段話拆成 2–3 條，像手機聊天；拆不動就原樣一條。
+{
+  assert.deepEqual(splitBubbles('好呀。那我先去看了！'), ['好呀。', '那我先去看了！']);
+  assert.deepEqual(splitBubbles('第一句\n第二句\n第三句\n第四句'), ['第一句', '第二句', '第三句第四句'], '最多三條，剩下的併進最後');
+  assert.deepEqual(splitBubbles('嗯'), ['嗯'], '只有一句就一條');
+  assert.deepEqual(splitBubbles('   '), []);
+  assert.deepEqual(splitBubbles(''), []);
+}
+
+console.log('test-discord-lane: 11 组断言通过');
