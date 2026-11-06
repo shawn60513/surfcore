@@ -34,7 +34,7 @@
 
 ### 批次 2026-11-06 23:10 · 让她能看 YouTube / IG Reels
 
-- 覆盖提交：待补
+- 覆盖提交：`9a2a399`（feat）+ `f2a360e`（manifest）
 - 建议版本：**0.9.1 patch**
 - 改动：
   - `src/discord-lane.js`：`replyPrompt()` 在有链接时追加 `LINK_HINT`（先 `video_probe` 再 `video_storyboard`，被登录墙挡住要直说）；镜像槽改成只留这一轮最后一段 assistant 文字（原本会把工具前的旁白、甚至抄回来的提示词一并发到 Discord）。
