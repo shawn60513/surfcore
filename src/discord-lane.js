@@ -552,7 +552,9 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
         const slot = mirrorTurns.get(eventTurn);
         if (event?.type === 'assistant/message') {
           const piece = blocksToText(event?.data?.content ?? event?.data?.message?.content ?? []);
-          if (piece) slot.text = slot.text ? slot.text + '\n' + piece : piece;
+          // 只留这一轮最后的 assistant 文字：中间几步（工具前的一句话、甚至把提示词抄回来）
+          // 不该出现在 Discord 里。
+          if (piece) slot.text = piece;
         }
         if (event?.type === 'turn/end') {
           mirrorTurns.delete(eventTurn);
@@ -645,6 +647,11 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
   }
 
   /** 把新訊息包成一次 turn：最近歷史 + 這一則（人設在 AGENTS.md 裡，不再每輪重發）。 */
+  // 他丟連結（YouTube / IG / B站）時，提醒她真的去看，而不是嘴上說「我去看看」。
+  const LINK_HINT =
+    '（這則裡有連結：先用 video_probe 看它多長，再用 video_storyboard 真的看畫面；看完說你看到什麼。IG 若被登入牆擋住就直說看不到，別裝作看過。）';
+  const hasLink = (text) => /https?:\/\/\S+/i.test(String(text ?? ''));
+
   function replyPrompt(name, text) {
     const log2 = history()
       .map((m) => `${m.role === 'user' ? '對方' : '你'}：${m.content}`)
@@ -662,6 +669,8 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       log2 ? `最近的對話：\n${log2}` : '',
       '',
       `對方剛說：${text}`,
+      '',
+      hasLink(text) ? LINK_HINT : '',
     ]
       .filter((line) => line !== '')
       .join('\n');

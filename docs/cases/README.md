@@ -6,6 +6,7 @@
 
 | 日期 | 案例 | 一句话 | 版本 |
 | --- | --- | --- | --- |
+| 2026-11-06 | [她能不能看 YouTube / IG Reels](./2026-11-06-lane-watch-links.md) | 装了 yt-dlp、加了「收到链接就去看」的提示；顺带修掉镜像把提示词抄进 Discord | 待发布 |
 | 2026-11-06 | [在 DSH 裡回話，Discord 看不到](./2026-11-06-lane-mirror-dsh-turns.md) | lane 只認自己發起的回合，GUI 開的那一輪整條被丟掉；加一條只讀鏡像通道 | 待发布 |
 | 2026-11-06 | [bridge 沒有自啟與看門狗，QQ 側一直空轉](./2026-11-06-bridge-autostart.md) | 加登入自啟＋5 分鐘看門狗；snowluma.enabled=false 把 QQ 整半邊關掉 | 待发布 |
 | 2026-11-06 | [lane 自查：魚の記憶又開回來了、心跳沒有、pid 是假的](./2026-11-06-lane-selfcheck.md) | 換會話沒關魚の記憶＝兩套記憶打架；B站 提醒沒有心跳、bridge.pid 是假的、心情插件還叫「伙伴」 | 待发布 |

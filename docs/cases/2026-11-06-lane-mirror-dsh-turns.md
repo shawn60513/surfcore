@@ -40,3 +40,10 @@ if (!waiting.turn || !collector) continue;
 - 镜像的是**这一个 lane 会话**里所有非 lane 发起的回合。若以后有别的插件也往这个会话开轮次（例如 speak-up），那些回复同样会被镜像到 Discord——目前 speak-up 总开关已关、目标会话已清空，所以不会发生；将来若重开，需要决定「它的话该不该进 Discord」。
 - 镜像失败只记日志、不重试（用户已在 DSH 里看到答案，重试可能造成 Discord 里出现两条一样的）。
 - 没有为它写单元测试：镜像依赖真实事件流（`session/event` 的 mux），现有 `test-discord-lane.mjs` 是纯函数级断言。若要加，需要把 `consumeEvents` 的镜像记账抽成 `applyMirrorEvent(state, event)` 纯函数。
+
+## 補記（23:05）：镜像把她抄回来的提示词发进了 Discord
+
+- 现象：让测试在一轮里调工具时，Discord 私訊出现一条几乎就是完整 `replyPrompt` 的消息（「（Discord 私訊）直接給聊天內容…最近的對話：」）。
+- 根因：镜像个槽把这一轮**所有** `assistant/message` 的文字用 `\n` 拼起来；模型在多步工具调用时会先复述一遍指令，那一段也被当成回答送出去。
+- 修法：`slot.text = piece`（后写覆盖先写），只在 `turn/end` 发最后一个 assistant 段。
+- 验证：同样的「看这支片」测试重跑，Discord 只剩两三条真正的回答。

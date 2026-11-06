@@ -32,6 +32,17 @@
 - 驗證：殺進程後 watchdog 拉起、日誌只剩 lane/B站提醒；audit 148/148。
 - 回滾：snowluma.enabled 改 true 並重啟 bridge；Unregister-ScheduledTask surfcore-bridge-logon/surfcore-bridge-watch。
 
+### 批次 2026-11-06 23:10 · 让她能看 YouTube / IG Reels
+
+- 覆盖提交：待补
+- 建议版本：**0.9.1 patch**
+- 改动：
+  - `src/discord-lane.js`：`replyPrompt()` 在有链接时追加 `LINK_HINT`（先 `video_probe` 再 `video_storyboard`，被登录墙挡住要直说）；镜像槽改成只留这一轮最后一段 assistant 文字（原本会把工具前的旁白、甚至抄回来的提示词一并发到 Discord）。
+  - 本机：`yt-dlp.exe` 放到 `%LOCALAPPDATA%\Microsoft\WindowsApps\`（已在 PATH，免重启 DSH）。
+- case：docs/cases/2026-11-06-lane-watch-links.md
+- 验证：YouTube（Big Buck Bunny 635s）与 IG Reel（muradosmann 1280p）都能 `video_probe`；真机让她看，她能描述画面；修镜像后 Discord 只剩最后一句。
+- 回滚：删掉 `LINK_HINT` 与 `hasLink` 的调用；镜像把 `slot.text = piece` 改回拼接。
+
 ### 批次 2026-11-06 22:35 · 看門狗改純 Node，不再彈框/搶焦點
 
 - 覆盖提交：a7315ce（+ 本批 manifest 提交）
