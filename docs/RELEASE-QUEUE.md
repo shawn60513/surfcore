@@ -22,11 +22,10 @@
 - 覆盖提交：4a9d33d
 - 建议版本：**0.9.1 patch**
 - 改动：
-  - `src/discord-lane.js`：開掃前把 `seen.md` 的 BV 清單（最近 20 個）塞進 `bili_scan` 提示詞，讓挑片的人自己避開刷過的；`pruneXingxiBindings()` 補綁當前會話時打日誌。
+  - `src/discord-lane.js`：工作區指示（`AGENTS.md`）加一條「分享 B站 片子必須說清講了什麼＋一個具體細節」；`pruneXingxiBindings()` 補綁當前會話時打日誌。
   - `src/lane-memory.js`：`pruneForeignBindings()` 除了摘掉外來綁定，還會把**當前 `sessionId` 補綁回她的檔案**，返回 `{removed, added, backup}`。
   - `scripts/test-lane-memory.mjs`：10 組（新增換會話後補綁、舊 lane 會話被摘）。
-  - 使用者設定（不入 repo）：`~/.dsh/bili-duty/config.json` 的 `perScan` 1→3、`scanPrompt` 改成自訂版（沒字幕就看簡介＋置頂＋評論，每條寫「講了什麼／最關鍵的一個點／爭議點」）。
-  - 工作區指示：`state/discord-lane-workspace/AGENTS.md` 增加「分享 B站 片子必須說清講了什麼＋一個具體細節」。
+  - 使用者設定（不入 repo）：`~/.dsh/bili-duty/config.json` 的 `perScan` 1→3、`scanPrompt` 改成自訂版（先讀 `seen.md` 判重、沒字幕就看簡介＋置頂＋評論，每條寫「講了什麼／最關鍵的一個點／爭議點」）。
 - case：[2026-11-06-lane-video-depth.md](../cases/2026-11-06-lane-video-depth.md)
 - 验证：`test-lane-memory` 10 組、`test-discord-lane` 9 組、`test-audit` 148/148；真機日誌「新會話已綁回她的星汐檔案」。
 - 回滚：`git revert <commit>`；或把 `perScan` 改回 1、`scanPrompt` 清空（回到預設）。
