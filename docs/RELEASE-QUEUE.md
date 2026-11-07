@@ -17,6 +17,16 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-07 23:45 — 她沒有耳朵（字幕通道）＋真人節奏
+
+**类型**：patch
+**范围**
+- 新增 scripts/watch-words.mjs：用 yt-dlp 抓 YouTube 字幕／自動字幕，印成純文字；拿不到就明說沒有。
+- src/discord-lane.js：LINK_HINT 改成「你沒有耳朵，只有畫面與字幕；要聽懂就抓字幕；抓不到就直說，別編理由」；send() 加 maybeDawdle()（22% 機會停 20–110 秒）；工作區規則加「有時候只回一句」「可以晚點再回」。
+
+**验证**：	est-discord-lane 12 組；watch-words 實測 YouTube 自動字幕成功、無字幕影片正確回報、B站 走 bili_subtitle；新會話 session-65844464-976e-4a88-81d2-dae96944131e。
+
+**回滚**：移掉 maybeDawdle() 與 LINK_HINT 的新段落，清 state/discord-lane.json 的 sessionId 重啟。
 ### 批次 2026-11-06 23:40 — 她自己的日子（人設第二版）
 
 **类型**：patch（只动提示词与人设，不动协议）

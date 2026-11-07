@@ -281,6 +281,8 @@ const LANE_WORKSPACE_RULES = [
   '照他的字走：他打繁體，你也用繁體；別整段翻成簡體。',
   '可以關心他（他喜歡被在乎），但別講道理、別寫健康科普或建議清單——用你的話說，像朋友那樣。',
   '別只當回應機器：偶爾主動講一句你自己剛才在干嘛、看到什麼、聽到什麼。',
+  '不是每次都要答得完整。有時候只回一句、兩三個字就夠了：「嗯。」「在。」「好笑。」',
+  '有時候你正忙著別的事（練歌、看片、在湖邊），可以晚一點才回，也可以先講自己在忙什麼再回。',
   '講 B 站 的片子時，別只丟標題加一句感想：先說清它到底講了什麼（一兩句），再給一個具體細節——原話、數據、畫面、時間點都行。只說「有意思」「值得看」等於沒說。',
 ].join('\n');
 
@@ -455,8 +457,21 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       .catch((error) => log(`Discord lane：同步 DSH 的回合失敗：${error?.message ?? error}`));
   }
 
+  // 真人不會秒回。偶爾先「想一下」再發：22% 的機會停 20–110 秒，其餘照舊。
+  const DAWDLE_CHANCE = 0.22;
+  const DAWDLE_MIN_MS = 20000;
+  const DAWDLE_MAX_MS = 110000;
+
+  async function maybeDawdle() {
+    if (!(Math.random() < DAWDLE_CHANCE)) return;
+    const ms = DAWDLE_MIN_MS + Math.floor(Math.random() * (DAWDLE_MAX_MS - DAWDLE_MIN_MS));
+    log(`Discord lane：先想一下再回（${Math.round(ms / 1000)} 秒）`);
+    await pause(ms);
+  }
+
   async function send(text, promptText = '') {
     text = stripPromptEcho(text, promptText) || text;
+    await maybeDawdle();
     const channelId = await ensureDm();
     const bubbles = splitBubbles(text);
     if (!bubbles.length) return;
@@ -691,7 +706,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
   /** 把新訊息包成一次 turn：最近歷史 + 這一則（人設在 AGENTS.md 裡，不再每輪重發）。 */
   // 他丟連結（YouTube / IG / B站）時，提醒她真的去看，而不是嘴上說「我去看看」。
   const LINK_HINT =
-    '（這則裡有連結：先用 video_probe 看它多長，再用 video_storyboard 真的看畫面；看完說你看到什麼。IG 若被登入牆擋住就直說看不到，別裝作看過。）';
+    '（這則裡有連結：先用 video_probe 看多長，再用 video_storyboard 看畫面。你沒有耳朵——聽不到聲音，只有畫面和字幕。想知道它到底在講什麼，先跑 node C:/Users/USER/Documents/deepseek-harness/default-workspace/surfcore/scripts/watch-words.mjs <連結> 拿字幕；B站 的片用 bili_subtitle。字幕拿不到就直說「我這兒只有畫面、沒有聲音」，別編理由（別說「怕吵到屋裡」這種）。IG 被登入牆擋住也直說。）';
   const hasLink = (text) => /https?:\/\/\S+/i.test(String(text ?? ''));
 
   function replyPrompt(name, text) {
