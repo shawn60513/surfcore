@@ -17,6 +17,17 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-08 01:20 — 語氣規則補三條（更像真人聊天）
+
+**类型**：patch
+**范围**
+- src/discord-lane.js：LANE_WORKSPACE_RULES 補三行——「附和要短」「每輪最多問一個問題，問完別自己搶著答」「小事說成拯救世界、大事輕飄飄帶過、難過先用玩笑包一層」。
+- ~/.dsh/surfcore/characters/char-mw372r7g/persona.md（不在 repo）：修正 3.1 一處錯字。
+
+**验证**：node scripts/test-discord-lane.mjs 13 組通過；換會話 session-dcde0336-08b0-4711-9c38-162c241aceaa；AGENTS.md 重寫生效。
+
+**回滚**：刪掉 RULES 新增三行，清 state/discord-lane.json 的 sessionId 重啟。
+
 ### 批次 2026-11-07 23:50 — 語氣與性格照遊戲原話校正
 
 **类型**：patch
