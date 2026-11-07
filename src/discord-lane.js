@@ -169,6 +169,17 @@ export function stripChatPeriods(text) {
     .join(String.fromCharCode(10));
 }
 
+/**
+ * 他連發好幾條時合成一次說完的內容：逐行接起來，空的不算。
+ * 這樣模型看到的是「好喔\n晚安」，回一次就好，不會各回一句。
+ */
+export function combineUserLines(lines) {
+  return (Array.isArray(lines) ? lines : [])
+    .map((line) => String(line ?? '').trim())
+    .filter(Boolean)
+    .join(String.fromCharCode(10));
+}
+
 export function splitBubbles(text, max = 3) {
   const raw = String(text ?? '').trim();
   if (!raw || max <= 1) return raw ? [raw] : [];
@@ -917,23 +928,40 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
         } catch {}
       }
 
+      // 他自己也可能一次連發好幾條（「好喔」「晚安」隔一秒）。當成一次說完，回一次就好，
+      // 不然會被拆成兩輪，各回一句「晚安」。
+      const incoming = [];
       for (const msg of messages) {
         if (state.botId && msg.authorId === state.botId) {
           state.lastMessageId = msg.id;
           save();
           continue;
         }
-        const hasImages = Array.isArray(msg.attachments) && msg.attachments.some((file) => /^image\//i.test(String(file?.contentType ?? '')));
-        const content =
-          msg.content ||
-          (hasImages ? '（對方發來一張圖片，圖在下面——先看圖再說。）' : '（對方發來一則沒有文字的訊息）');
+        incoming.push(msg);
+      }
+
+      if (incoming.length) {
+        const last = incoming.at(-1);
+        const lines = [];
+        const imageParts = [];
+        const notes = [];
+        for (const msg of incoming) {
+          const hasImages = Array.isArray(msg.attachments) && msg.attachments.some((file) => /^image\//i.test(String(file?.contentType ?? '')));
+          const text =
+            msg.content ||
+            (hasImages ? '（對方發來一張圖片，圖在下面——先看圖再說。）' : '（對方發來一則沒有文字的訊息）');
+          lines.push(text);
+          if (hasImages) {
+            const images = await fetchImageParts(msg.attachments).catch(() => ({ parts: [], note: '' }));
+            imageParts.push(...images.parts);
+            if (images.note) notes.push(images.note);
+          }
+        }
+        const content = combineUserLines(lines);
         try {
-          const images = hasImages
-            ? await fetchImageParts(msg.attachments).catch(() => ({ parts: [], note: '' }))
-            : { parts: [], note: '' };
-          const imageParts = images.parts;
-          const basePrompt = replyPrompt(String(msg.author ?? ''), content);
-          const promptText = images.note ? basePrompt + String.fromCharCode(10) + images.note : basePrompt;
+          const basePrompt = replyPrompt(String(last.author ?? ''), content);
+          const note = notes.join(String.fromCharCode(10));
+          const promptText = note ? basePrompt + String.fromCharCode(10) + note : basePrompt;
           let reply;
           try {
             reply = await runTurn(promptText, imageParts);
@@ -943,19 +971,18 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
             log(`Discord lane：帶圖那輪沒過（${error?.message ?? error}），退回純文字重試`);
             reply = await runTurn(promptText);
           }
-          pushHistory('user', content);
+          for (const line of lines) pushHistory('user', line);
           pushHistory('bot', reply);
           state.lastUserAt = Date.now();
           state.lastBotAt = Date.now();
           await send(reply, promptText);
-          // 送出成功才推水位：模型或網路失敗時，下一輪會重試同一則，而不是讓它永久消失。
-          state.lastMessageId = msg.id;
+          // 送出成功才推水位：模型或網路失敗時，下一輪會重試同一批，而不是讓它永久消失。
+          state.lastMessageId = last.id;
           save();
           appendDiary(memory, { user: content, assistant: reply });
-          log(`Discord lane：回了 ${msg.author ?? ''} 一句`);
+          log(`Discord lane：回了 ${last.author ?? ''} 一句`);
         } catch (error) {
           log(`Discord lane 回覆失敗（這則保留，下一輪重試）：${error?.message ?? error}`);
-          break;
         }
       }
 

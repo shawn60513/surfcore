@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine } from '../src/discord-lane.js';
+import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -189,4 +189,12 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(formatTasteLine(null), '', '沒設定也不炸');
 }
 
-console.log('test-discord-lane: 14 组断言通过');
+// 15) 連發好幾條當一次說完：合併成多行，空的不算。
+{
+  assert.equal(combineUserLines(['好喔', '晚安']), ['好喔', '晚安'].join(String.fromCharCode(10)));
+  assert.equal(combineUserLines(['  在嗎  ', '', null]), '在嗎', '空白與空值不算');
+  assert.equal(combineUserLines([]), '');
+  assert.equal(combineUserLines(null), '');
+}
+
+console.log('test-discord-lane: 15 组断言通过');
