@@ -7,6 +7,24 @@
 
 ---
 
+## 快照：2026-11-08 01:30（像真正的愛彌斯 + B站 板块收编，未发布）
+
+### 当前事实
+
+- **分支**：`feat/discord-mcp`，HEAD `f279818`，已推 fork `shawn60513/surfcore`；origin（Mieksido）无写权限。
+- **测试**：`test-audit` **149/149**；`test-discord-lane` 13 组；`test-release-manifest` 通过（720 files）。
+- **人设**：`~/.dsh/surfcore/characters/char-mw372r7g/persona.md`（不在 repo）＝9 章 + 22 条原作原话 + 动机层（寂寞/怕失望/玩笑包难过/深层愤怒），由 lane 同步进 `state/discord-lane-workspace/AGENTS.md`（换会话才重注入）。
+- **语气**：STYLE_SAMPLES（8 组例句）、TONE_CARD、stripChatPeriods（去句尾句号）、maybeDawdle（22% 概率 20–110s 慢回）；工作区规则：短碎/每轮一问/附和短/玩笑包难过。
+- **研究交付**：`state/aemeath-canon.md`（原作 42 条原话）、`state/chat-style-guide.md`（年轻人聊天 10 规则）、`state/surfcore-bili-inventory.md`（B站 板块盘点）。
+- **B站 收编**：`src/bili-status.js`（只读摘要 CLI）+ `scripts/test-bili-status.mjs`；scanPrompt 加质量门槛（播放<5万且超3天跳过）；判重表已在 scanPrompt。
+- **运行态**：bridge PID 48984（watchdog 拉起，PID 写入 state/bridge.pid）；lane 会话 `session-cf1357a2-157c-4e9d-a047-65f882a86469`；QQ 关、生物钟关（platforms.start.bili=false）、speak-up 关、鱼の记忆对 lane 关。
+
+### 下一步
+
+- 等用户实测「像不像真正的愛彌斯」；不满意就按 canon/chat-guide 继续调 persona 或 STYLE_SAMPLES。
+- 用户绑手机后，用 `bili_reply` 做一次真机 @ 验证（bili 段 allowComment=true 已就绪）。
+- 合并 dev / 发布 0.9.1 仍在等 origin 写权限。
+
 ## 快照：2026-11-06 17:40（自啟＋看門狗＋關 QQ，未發布）
 
 ### 當前事實
