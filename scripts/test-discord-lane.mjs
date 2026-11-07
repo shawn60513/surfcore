@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, isPromptMessage, readMemoryBrief, samePromptText, splitBubbles, stripPromptEcho, timeLine } from '../src/discord-lane.js';
+import { createTurnAttributor, isPromptMessage, readMemoryBrief, samePromptText, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -165,4 +165,13 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(stripPromptEcho('最近的對話：\n對方：嗨', ''), '對方：嗨', '只剪提示那行，對話內容留著');
 }
 
-console.log('test-discord-lane: 12 组断言通过');
+// 13) 聊天不打句号：只剪结尾那一个「。」，问号感叹号省略号都不动。
+{
+  assert.equal(stripChatPeriods('哦，那是連著的故事啊。'), '哦，那是連著的故事啊');
+  assert.equal(stripChatPeriods('那我接著看。\n甜是甜。'), '那我接著看\n甜是甜');
+  assert.equal(stripChatPeriods('要聽真話？'), '要聽真話？', '问号不动');
+  assert.equal(stripChatPeriods('……好啊。'), '……好啊', '省略号留着，句号剪掉');
+  assert.equal(stripChatPeriods('。'), '。', '只有句号就别动');
+}
+
+console.log('test-discord-lane: 13 组断言通过');

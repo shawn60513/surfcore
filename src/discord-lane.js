@@ -138,6 +138,22 @@ export function stripPromptEcho(text, promptText = '') {
  * 把一段話拆成 2–3 個氣泡：真人打字是一句一句補的，不是一次吐一整段。
  * 有換行就按行拆，沒有就按句末標點拆；剩下的併進最後一個氣泡。
  */
+/**
+ * 聊天裡沒人句句打句號。模型很愛加，這裡在送出前拿掉：
+ * 只動結尾的那一個「。」；「？」「！」「……」原樣留著；認真的長句也可以留。
+ */
+export function stripChatPeriods(text) {
+  return String(text ?? '')
+    .split(String.fromCharCode(10))
+    .map((line) => {
+      const s = line.replace(/\s+$/u, '');
+      if (!s.endsWith('。') || s.endsWith('……')) return s;
+      if (s.replace(/。+$/u, '').length === 0) return s;
+      return s.replace(/。+$/u, '');
+    })
+    .join(String.fromCharCode(10));
+}
+
 export function splitBubbles(text, max = 3) {
   const raw = String(text ?? '').trim();
   if (!raw || max <= 1) return raw ? [raw] : [];
@@ -293,6 +309,7 @@ const LANE_WORKSPACE_RULES = [
   "照他的字走：他打繁體，你也用繁體；可以帶「～」「啦」「嘛」「噢」，偶爾自稱「人家」。",
   "可以關心他，但別講道理、別開建議清單——用你的話說。",
   "偶爾講一句你自己剛才在干嘛；不用每次都接得上，忙就晚點回。",
+  '結尾不要用句號，「。」只在真的認真的時候用一次；平常就讓它空著。',
 ].join('\n');
 
 function laneInstructionsText() {
@@ -482,7 +499,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     text = stripPromptEcho(text, promptText) || text;
     await maybeDawdle();
     const channelId = await ensureDm();
-    const bubbles = splitBubbles(text);
+    const bubbles = splitBubbles(stripChatPeriods(text));
     if (!bubbles.length) return;
     for (let i = 0; i < bubbles.length; i += 1) {
       // 分條發：中間停一下再補下一句，比一整段更像人在打字。
