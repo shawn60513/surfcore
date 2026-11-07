@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "version": "0.8.8",
   "source": "git:HEAD",
-  "generatedAt": "2026-11-07T15:37:53.375Z",
+  "generatedAt": "2026-11-07T15:41:09.719Z",
   "files": {
     ".gitignore": "df9b778e654706a89497277c5e725dddc5e9e0ab2675e5ff21cda9b7fae476c0",
     ".npmrc": "a093bb2fed59d699b7f9a62a5203cc196054c624e9c39c6d908c9e7db5dd2464",
@@ -143,7 +143,7 @@
     "docs/cases/2026-11-06-lane-alive-tier1.md": "4af72735ff84a1139c3e132c48f6c73b94543f533c944062db751aa0837a89fe",
     "docs/cases/2026-11-06-lane-memory-card.md": "770e64aaa92ca5b955067a82e53bd91f14ea7f7fe38c398d4179c90c609cb079",
     "docs/cases/2026-11-06-lane-mirror-dsh-turns.md": "d0c8b58060152d84f6201abb5a28c4b1fe84b9dd8b73e070b1d98ad233271500",
-    "docs/cases/2026-11-06-lane-persona-drift.md": "20827a3b828468e195a93f627b248fc99fecb4f5248d07747953b8bf5a7c732b",
+    "docs/cases/2026-11-06-lane-persona-drift.md": "632d6ab493859598d20e8d39a3c5c9507791fade0a26b2a8b2c2c243bb97c085",
     "docs/cases/2026-11-06-lane-persona-to-agents.md": "8d77027b6c12720bf23ba018ac8c77c01e5c3c94ec70c3186825390af8f1e604",
     "docs/cases/2026-11-06-lane-selfcheck.md": "84c497215501b052c687d6088351bef28ee8b4ee5ff51e5da1b9e8e6aa81a076",
     "docs/cases/2026-11-06-lane-video-depth.md": "30d336467624456701508a07a9af3e780dc8839dc74c07308b2a38269b48a326",
