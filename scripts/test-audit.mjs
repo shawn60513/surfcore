@@ -293,6 +293,8 @@ const tests = [
   'test-bili-inbox.mjs',
   // B站 safe MCP：关注列表 / @我 / 关注开关 fail-closed / 凭证缺失降级 / stdio 四工具。
   'test-bili-safe.mjs',
+  // B站 例行状态只读摘要：判重只认「看过的视频」节、发动态开着有警告。
+  'test-bili-status.mjs',
 ];
 let failed = 0;
 for (const test of tests) {

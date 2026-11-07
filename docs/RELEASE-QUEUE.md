@@ -17,6 +17,19 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-08 01:30 — B站 例行状态摘要（bili-status）
+
+**类型**：patch
+
+**范围**
+- src/bili-status.js（新）：只读摘要 CLI；scripts/test-bili-status.mjs（新，9 项）；scripts/test-audit.mjs 登记。
+- ~/.dsh/bili-duty/config.json：scanPrompt 追加质量门槛一行（播放<5万且超3天默认跳过）。
+
+**验证**：test-bili-status 9/9、test-audit 149/149。
+
+**回滚**：删 src/bili-status.js 与测试、test-audit 去掉登记、scanPrompt 删掉那一行。
+
+
 ### 批次 2026-11-08 01:20 — 語氣規則補三條（更像真人聊天）
 
 **类型**：patch
