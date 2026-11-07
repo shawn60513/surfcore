@@ -17,6 +17,22 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-08 02:05 — 口味改成按需注入（不寫進人設）
+
+**类型**：patch
+
+**范围**
+- src/discord-lane.js：新增导出 shouldOfferTaste / formatTasteLine；lane 工厂内 TASTE_FILE()/readTaste()/tasteHint()，只在聊到片子或链接那轮注入口味行（replyPrompt / proactivePrompt）；LANE_WORKSPACE_RULES 保留「你絕對不能做的事」六条。
+- scripts/test-discord-lane.mjs：第 14 组（口味触发与格式化、空输入不炸）。
+- ~/.dsh/surfcore/characters/char-mw372r7g/persona.md（不在 repo）：删掉第一版加进去的「十、他爱看什么」「十一、你绝对不能再做的事」（回到 3,466 字）。
+
+**验证**：test-discord-lane 14 组；test-audit 149/149；换会话 session-b3a26da0-30f5-46f9-a6ca-0389ab1d720f（02:01:41），AGENTS.md 重写生效。
+
+**回滚**：删掉 shouldOfferTaste/formatTasteLine/tasteHint 与两处调用、删第 14 组；红线六条可保留。
+
+**为什么改**：用户指出「直接写人设会多耗 token」——人设每会话注入一次，口味却是偶尔才用；改成按需注入后，平时 0 成本、聊片子那轮约 120 字，且口味始终以 ~/.dsh/surfcore/bili.config.json 为唯一真相源。
+
+
 ### 批次 2026-11-08 01:55 — 影片口味與硬紅線
 
 **类型**：patch

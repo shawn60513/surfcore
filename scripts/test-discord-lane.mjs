@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, isPromptMessage, readMemoryBrief, samePromptText, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine } from '../src/discord-lane.js';
+import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -174,4 +174,19 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(stripChatPeriods('。'), '。', '只有句号就别动');
 }
 
-console.log('test-discord-lane: 13 组断言通过');
+// 14) 口味：只在跟片子有關的那一輪才帶，資料從 surfcore 設定搬過來。
+{
+  assert.equal(shouldOfferTaste('這個你看看 BV1sdxW6VEui'), true, '帶 BV 要帶口味');
+  assert.equal(shouldOfferTaste('有沒有推薦的'), true, '問推薦要帶口味');
+  assert.equal(shouldOfferTaste('https://youtu.be/aqz-KE-bpKQ'), true, '連結要帶口味');
+  assert.equal(shouldOfferTaste('晚安'), false, '閒聊不帶，省 token');
+  assert.equal(shouldOfferTaste('今天吃什麼'), false, '吃飯不帶');
+
+  const line = formatTasteLine({ like: ['貓咪', '鋼彈'], dislike: ['帶貨'] });
+  assert.ok(line.includes('貓咪、鋼彈'), '要列出愛看的');
+  assert.ok(line.includes('不碰：帶貨'), '要列出不碰的');
+  assert.equal(formatTasteLine({ like: [], dislike: [] }), '', '沒有口味就整行不出現');
+  assert.equal(formatTasteLine(null), '', '沒設定也不炸');
+}
+
+console.log('test-discord-lane: 14 组断言通过');
