@@ -17,6 +17,19 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-08 01:55 — 影片口味與硬紅線
+
+**类型**：patch
+
+**范围**
+- src/discord-lane.js：LANE_WORKSPACE_RULES 加两行（硬规则优先、推荐按口味且四类不推）。
+- ~/.dsh/surfcore/characters/char-mw372r7g/persona.md（不在 repo）：新增「十、他爱看什么，你能看什么」「十一、你绝对不能再做的事」。
+
+**验证**：test-discord-lane 13 组；换会话 session-dfa50554 生效，AGENTS.md 含两节。
+
+**回滚**：删规则两行与 persona 两节，清 sessionId 重启。
+
+
 ### 批次 2026-11-08 01:30 — B站 例行状态摘要（bili-status）
 
 **类型**：patch
