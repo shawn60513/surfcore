@@ -180,6 +180,17 @@ export function combineUserLines(lines) {
     .join(String.fromCharCode(10));
 }
 
+/**
+ * 模型被要求「不想開口就回跳過」。它有时写简体「跳过」，有时加标点、括号、星号。
+ * 只要整句去掉空白和标点后等于这些词之一，就当它是「这次不开口」——绝不能发出去。
+ */
+export function isSkipReply(text) {
+  // 只留下文字（去掉空白、標點、括號、星號、數字），再比對。
+  const bare = String(text ?? '').replace(/[^\p{L}]/gu, '').toLowerCase();
+  if (!bare) return false;
+  return ['跳過', '跳过', 'skip', '不開口', '不开口'].includes(bare);
+}
+
 export function splitBubbles(text, max = 3) {
   const raw = String(text ?? '').trim();
   if (!raw || max <= 1) return raw ? [raw] : [];
@@ -996,7 +1007,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
           state.lastProactiveAt = now;
           save();
           const text = await runTurn(proactivePrompt());
-          if (text.replace(/[。！!.…\s]/g, '') !== '跳過') {
+          if (!isSkipReply(text)) {
             pushHistory('bot', text);
             state.lastBotAt = Date.now();
             save();
@@ -1025,7 +1036,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       working = true;
       try {
         const reply = await runTurn(String(promptText));
-        if (!reply || reply.replace(/[。！!.…s]/g, '') === '跳過') return false;
+        if (!reply || isSkipReply(reply)) return false;
         pushHistory('bot', reply);
         state.lastBotAt = Date.now();
         save();

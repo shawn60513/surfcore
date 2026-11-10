@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines } from '../src/discord-lane.js';
+import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -197,4 +197,15 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(combineUserLines(null), '');
 }
 
-console.log('test-discord-lane: 15 组断言通过');
+// 16) 「跳過」只认得出繁体是 bug：简繁/标点/括号都要认得，说完不能发出去。
+{
+  assert.equal(isSkipReply('跳过'), true, '简体也要认——线上就是这么漏出去的');
+  assert.equal(isSkipReply('跳過。'), true);
+  assert.equal(isSkipReply('（跳過）'), true);
+  assert.equal(isSkipReply('**skip**'), true);
+  assert.equal(isSkipReply('  '), false);
+  assert.equal(isSkipReply('跳过吧'), false, '带别的字就不算');
+  assert.equal(isSkipReply('好啊'), false);
+}
+
+console.log('test-discord-lane: 16 组断言通过');
