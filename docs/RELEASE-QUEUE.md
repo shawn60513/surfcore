@@ -12,6 +12,24 @@
 
 ---
 
+## 待发布 · 2026-11-13 06:15 · 換聲第二輪調音（速度／音高／電子音）
+
+- **覆盖提交**：本批次
+- **功能**：`rate 6→4`、`f0up 6→11`（對齊日配 351 Hz）、`indexRate 0.5→0.4`、`rmsMixRate 0.25→0.45`；兩份 config 同步。
+- **重要更正**：上一輪用自相關量 pitch，挑到 2 倍週期（低八度），307.7 Hz 那組數字不可信；本輪改用 `librosa.pyin` 重掃，+`f0up` 與實際半音幾乎 1:1。
+- **檔案**：`config.json`、`config.example.json`、`docs/cases/2026-11-13-lane-voice-tune2.md`
+- **case**：`docs/cases/2026-11-13-lane-voice-tune2.md`
+- **建議版本**：0.9.1 patch
+- **回滾**：`voice.rate` 回 6、`voice.rvc.f0up` 回 6、`indexRate` 回 0.5、`rmsMixRate` 回 0.25。
+
+```text
+fix(voice): 對齊日配的音高與語速（上一輪量錯，f0up 6 根本不夠）
+
+- 日配 pyin 中位 351 Hz；SAPI 原聲 182 Hz → 需要 +11 半音，不是 +6
+- 上一輪自相關法挑到 2 倍週期，307.7 Hz 是假數字
+- rate 6→4（30 字 3.80s→4.24s），index 0.5→0.4 減電子味，rms 0.25→0.45 讓起伏自然
+```
+
 ## 待发布 · 2026-11-13 05:05 · 換聲（RVC v2 語音包接進 lane）
 
 - **覆盖提交**：本批次（feat: 她自己的聲音）

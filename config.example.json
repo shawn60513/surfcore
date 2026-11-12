@@ -437,10 +437,10 @@
           "worker": "scripts/rvc/worker.py",
           "modelDir": "state/voice-model",
           "hfHome": "state/voice-src/hf",
-          "f0up": 6,
-          "indexRate": 0.5,
+          "f0up": 11,
+          "indexRate": 0.4,
           "protect": 0.5,
-          "rmsMixRate": 0.25,
+          "rmsMixRate": 0.45,
           "filterRadius": 3,
           "timeoutMs": 120000
         }
