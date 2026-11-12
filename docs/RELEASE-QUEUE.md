@@ -14,6 +14,25 @@
 
 ## 待发布
 
+## 2026-11-13 04:40 — 讓她有聲音（離線 SAPI + 語音附件）
+
+- 覆蓋提交：`（本批提交）`
+- 文件：`src/tts.js`（新）、`src/discord-core.js`（`discordUpload()`、`sendMessage({file})`）、`src/discord-lane.js`（`maybeSendVoice()`）、`scripts/test-tts.mjs`（新）、`scripts/test-mcp-discord.mjs`（5f）、`scripts/test-audit.mjs`、`package.json`（無新依賴）
+- case：[`docs/cases/2026-11-13-lane-voice.md`](cases/2026-11-13-lane-voice.md)
+- 建議版本：**0.9.1 patch**（單一功能；若要一起發也併進同批）
+- 影響面：只有 Discord 私訊 lane 會偶爾多一條 wav；關掉只要 `discord.lane.voice.enabled=false`。
+- 回滾：`git revert <本批提交>`，或把 `voice.enabled` 設 false。
+
+**交接塊**
+
+```
+[surfcore] 她現在會講話了（離線，不花 API）
+- 新 src/tts.js：Windows SAPI 合成 wav（Microsoft Hanhan zh-TW 女聲），無 key、無網路
+- discord-core 支援附件上傳（multipart，payload_json 裡 @everyone 仍壓住）
+- lane 回覆後 35% 機率挑最後一句唸出來丟過去；語音失敗不影響文字
+- 測試：test-tts 7 組、test-mcp-discord 加 5f、test-audit 150/150
+```
+
 ## 2026-11-13 04:25 — lane 全面體檢（P0 事件流不重連等 7 項）
 
 - 覆蓋提交：`（本批提交）`

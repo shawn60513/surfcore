@@ -425,7 +425,13 @@
       "quietEnd": 8,
       "proactive": true,
       "memoryCard": "",
-      "consolidateHour": 23
+      "consolidateHour": 23,
+      "voice": {
+        "enabled": false,
+        "chance": 0.35,
+        "maxChars": 60,
+        "rate": 2
+      }
     },
     "mentionUsers": [],
     "pingOnReply": true,

@@ -28,6 +28,7 @@ import {
   allowedMentionsFor,
 } from './discord-core.js';
 import { readPersonaLayerText } from './character-persona.js';
+import { pickSpeakLine, shouldSpeak, synthesizeWav } from './tts.js';
 import { discoverDshBaseUrl, isLoopbackBaseUrl, probeDshBaseUrl } from './dsh-port.js';
 
 const LANE_VERSION = 1;
@@ -506,6 +507,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
   const discordCfg = loadDiscordConfig(root);
   const { token, source } = resolveDiscordToken(discordCfg);
   const discordClient = createDiscordClient({ token, cfg: discordCfg });
+const discordSendMessage = (channelId, payload) => discordClient.sendMessage(channelId, payload);
   if (!token) {
     return { async start() { log(`Discord lane 未啟動：拿不到 bot token（${source}）`); } };
   }
@@ -600,7 +602,38 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
         }
       }
     }
+    // 文字送完再決定要不要配一條語音（失敗不影響文字）。
+    await maybeSendVoice(bubbles.join(' '));
     return { sent, failed };
+  }
+
+  /**
+   * 偶爾配一條語音：把最後一句唸出來丟過去。
+   * 語音壞了不影響文字（文字早就送出去了），只記一條 log。
+   */
+  async function maybeSendVoice(text) {
+    const voiceCfg = laneCfg.voice ?? {};
+    if (voiceCfg.enabled === false) return;
+    const chance = Number.isFinite(Number(voiceCfg.chance)) ? Number(voiceCfg.chance) : 0.35;
+    const maxChars = Number.isFinite(Number(voiceCfg.maxChars)) ? Number(voiceCfg.maxChars) : 60;
+    if (chance <= 0 || Math.random() > chance) return;
+    const line = pickSpeakLine(text, maxChars);
+    if (!shouldSpeak(line, { maxChars })) return;
+    let file = '';
+    try {
+      file = await synthesizeWav(line, { rate: Number(voiceCfg.rate ?? 2) });
+      const data = fs.readFileSync(file);
+      const channelId = await ensureDm();
+      await discordSendMessage(channelId, {
+        content: '',
+        file: { name: 'aimisi.wav', data, contentType: 'audio/wav' },
+      });
+      log(`Discord lane：配了一句語音（${line.slice(0, 20)}…，${Math.round(data.length / 1024)}KB）`);
+    } catch (error) {
+      log(`Discord lane：語音沒送出去（${error?.code ?? error?.message ?? error}）`);
+    } finally {
+      if (file) { try { fs.unlinkSync(file); } catch {} }
+    }
   }
 
   // ── DSH 端 ─────────────────────────────────────────────────────────────

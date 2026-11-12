@@ -255,9 +255,39 @@ check('缺 config 时默认启用且白名单为空（fail-closed）', defaults.
   check('limit 出现在查询串', fetchImpl.calls.some((c) => c.url.includes('limit=10')));
 }
 
+// 5f) 附件上傳（語音）走 multipart；payload_json 裡仍要壓住 @everyone
+{
+  let seenBody = null;
+  const fetchImpl = async (url, init) => {
+    if (init.method === 'GET' || !init.method) {
+      return new Response(JSON.stringify({ id: CHANNEL, type: 0, guild_id: GUILD }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    seenBody = init.body;
+    return new Response(JSON.stringify({ id: '900', content: '' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  const client = createDiscordClient({ token: 'x', cfg: baseCfg, fetchImpl });
+  const sent = await client.sendMessage(CHANNEL, {
+    content: '',
+    file: { name: 'voice.wav', data: Buffer.alloc(2048, 7), contentType: 'audio/wav' },
+  });
+  check('附件上傳回 ok', sent.ok === true);
+  check('附件走 multipart', seenBody instanceof FormData);
+  const payload = JSON.parse(String(seenBody.get('payload_json')));
+  check('payload 的 @everyone 仍被壓住', JSON.stringify(payload.allowed_mentions.parse) === '[]');
+  const file = seenBody.get('files[0]');
+  check('multipart 裡有檔案', Boolean(file && file.size > 0));
+}
 // ── 10. stdio 接入（像 DSH 的 dsh-mcp-client）────────────────────
 {
-  const transport = new StdioClientTransport({
+  
+
+const transport = new StdioClientTransport({
     command: process.execPath,
     args: [path.join(ROOT, 'src', 'mcp-discord-safe.js')],
     cwd: ROOT,

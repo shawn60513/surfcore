@@ -287,6 +287,7 @@ const tests = [
   'test-persona-wake-injection.mjs',
   // Discord MCP：白名单 fail-closed、发送压制 @everyone、429 重试、stdio 六工具接入。
   'test-mcp-discord.mjs',
+  'test-tts.mjs',
   'test-discord-lane.mjs',
   'test-lane-memory.mjs',
   // B站 @ 提醒：首轮只记水位、新条目只提醒一次、lane 送不出去不吞。

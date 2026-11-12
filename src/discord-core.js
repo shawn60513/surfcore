@@ -100,6 +100,63 @@ function hintForStatus(status, body) {
   return `Discord 返回 HTTP ${status}${detail}；先核对 ID 与 Bot 权限，再重试`;
 }
 
+/**
+ * 上傳附件（語音、圖片）。Discord 收 multipart/form-data：`payload_json` + `files[0]`。
+ * 純 REST，跟 discordRequest 一樣只重試一次 429。
+ */
+export async function discordUpload({
+  token,
+  route,
+  payload,
+  file,
+  fetchImpl = globalThis.fetch,
+  timeoutMs = 30000,
+  sleep = defaultSleep,
+}) {
+  if (!token) {
+    throw new DiscordError('discord.no-token', '拿不到 Discord bot token', '在凭据服务写入 DSH_DISCORD_BOT_TOKEN');
+  }
+  if (!file?.data?.length) {
+    throw new DiscordError('discord.no-file', '要上传的文件是空的', '检查刚生成的音频/图片');
+  }
+  const url = route.startsWith('http') ? route : `${DISCORD_API}${route}`;
+  const build = () => {
+    const form = new FormData();
+    form.append('payload_json', JSON.stringify(payload ?? {}));
+    form.append(
+      'files[0]',
+      new Blob([file.data], { type: file.contentType || 'application/octet-stream' }),
+      file.name || 'file',
+    );
+    return form;
+  };
+
+  for (let attempt = 0; ; attempt += 1) {
+    let response;
+    try {
+      response = await fetchImpl(url, {
+        method: 'POST',
+        headers: { Authorization: `Bot ${token}`, 'User-Agent': 'DiscordBot (surfcore, 0.8)' },
+        body: build(),
+        signal: typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(timeoutMs) : undefined,
+      });
+    } catch (error) {
+      throw new DiscordError('discord.network', `连不上 Discord：${error?.message ?? error}`, '检查网络/代理');
+    }
+    const text = await response.text();
+    if (response.status === 429 && attempt === 0) {
+      let retryAfter = 1;
+      try { retryAfter = Number(JSON.parse(text)?.retry_after ?? 1); } catch {}
+      await sleep(Math.min(5000, Math.max(500, retryAfter * 1000)));
+      continue;
+    }
+    if (!response.ok) {
+      throw new DiscordError(`discord.http-${response.status}`, `Discord 返回 HTTP ${response.status}：${text.slice(0, 200)}`, '先核对频道 ID 与 Bot 权限');
+    }
+    try { return text ? JSON.parse(text) : {}; } catch { return {}; }
+  }
+}
+
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -326,19 +383,31 @@ export function createDiscordClient({ token, cfg, fetchImpl, timeoutMs, sleep, n
       return list.slice().reverse().map((m) => normalizeMessage(m));
     },
 
-    async sendMessage(channelId, { content, replyTo, mentions } = {}) {
+    async sendMessage(channelId, { content, replyTo, mentions, file } = {}) {
       if (!cfg.allowSend) {
         throw new DiscordError('discord.send-disabled', 'discord.allowSend=false，发送已关闭', '在 config.json 把 discord.allowSend 设为 true 再试');
       }
       await requireAllowedChannel(channelId);
-      const text = sanitizeMessageContent(content, cfg.maxContentLength);
+      // 只有附件、没有文字也可以发（語音就是這樣）。
+      const text = file
+        ? String(content ?? '').slice(0, cfg.maxContentLength)
+        : sanitizeMessageContent(content, cfg.maxContentLength);
       const body = {
         content: text,
         // @everyone / @role 永远压制；只有 discord.mentionUsers 白名单里的 ID 会真的 ping 到人。
         allowed_mentions: allowedMentionsFor(cfg, mentions, Boolean(replyTo)),
       };
       if (replyTo) body.message_reference = { message_id: String(replyTo), fail_if_not_exists: false };
-      const sent = await request('POST', `/channels/${channelId}/messages`, body);
+      const sent = file
+        ? await discordUpload({
+          token,
+          route: `/channels/${channelId}/messages`,
+          payload: body,
+          file,
+          fetchImpl,
+          timeoutMs: Math.max(Number(cfg.requestTimeoutMs) || 15000, 30000),
+        })
+        : await request('POST', `/channels/${channelId}/messages`, body);
       return {
         ok: true,
         id: String(sent?.id ?? ''),
