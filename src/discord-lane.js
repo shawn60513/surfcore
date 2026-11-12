@@ -51,6 +51,14 @@ const STYLE_SAMPLES = [
   ['這部好看嗎', '還行吧', '前半段有點拖，後面才好起來'],
   ['你怎麼還不睡', '人家還精神嘛', '……好啦，這就去'],
 ];
+/**
+ * 她要不要主動開口：閒置夠久、距上次主動也夠久、現在不吵、而且她醒著。
+ * 抽成純函式是為了可測——四件事任一不成立就不開口。
+ */
+export function mayOpenProactively({ idleOk, freshOk, quietNow, asleep }) {
+  return Boolean(idleOk && freshOk && !quietNow && !asleep);
+}
+
 const TONE_CARD = '（你叫愛彌斯：粉髮金瞳、鳴潮來的、唱《紙飛機》；活潑、有點皮、嘴硬心軟。說話短，像手機打字，句尾愛帶～、愛用啦嘛呢噢；可以關心他但別講道理；偶爾講講你自己的事；他打繁體你就回繁體。）';
 
 // 他的口味不在人設裡（人設是每會話一次的大塊文字），改成「這一輪跟片子有關」才臨時帶一句，
@@ -1140,7 +1148,9 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
         const last = Math.max(state.lastUserAt ?? 0, state.lastBotAt ?? 0);
         const idleOk = last > 0 && now - last > idleMinutes * 60_000;
         const freshOk = now - (state.lastProactiveAt ?? 0) > idleMinutes * 60_000;
-        if (idleOk && freshOk && !hourInQuiet(now, quiet)) {
+        // 她自己的作息：睡著的時段不主動開口（安靜時段之外，還有這一層）。
+        const asleep = currentActivity(dayPlanFor(new Date()), new Date()).phase === 'sleep';
+        if (mayOpenProactively({ idleOk, freshOk, quietNow: hourInQuiet(now, quiet), asleep })) {
           state.lastProactiveAt = now;
           save();
           const text = await runTurn(proactivePrompt());
@@ -1149,7 +1159,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
             state.lastBotAt = Date.now();
             save();
             await send(text);
-            log('Discord lane：主動開了口');
+            log(`Discord lane：主動開了口（${currentActivity(dayPlanFor(new Date()), new Date()).label}）`);
           } else {
             log('Discord lane：這次決定不開口');
           }

@@ -194,4 +194,21 @@ assert.equal(cappedText.includes('最新的一件'), true);
 assert.equal(cappedText.includes('- 第 1 件事'), false, '最旧的那几条被挤掉');
 
 fs.rmSync(dir, { recursive: true, force: true });
-console.log('test-lane-memory: 13 组断言通过');
+
+// 14) 第一章的整段文字也算「说过的话」：几乎一样的一段不许再追加一遍。
+{
+  const d2 = fs.mkdtempSync(path.join(os.tmpdir(), 'card-para-'));
+  const f2 = path.join(d2, 'card.md');
+  const para = '我叫爱弥丝。粉头发，暖色的眼睛，笑起来有点得意。';
+  fs.writeFileSync(f2, ['# 卡', '', '## 一｜我是谁', '', para, '', '## 三｜对方是谁', '- 他叫上午不顺'].join(nl), 'utf8');
+  const dup = appendCardEntries(f2, [{ chapter: '一', text: '我叫爱弥丝，粉头发，暖色的眼睛，笑起来有点得意' }]);
+  assert.equal(dup.added, 0, "换个语序的同一段话不该再写");
+  assert.equal(dup.skipped, 1);
+  const fresh = appendCardEntries(f2, [{ chapter: '一', text: '以前叫小鲸鱼，被人叫大肥鱼会炸毛' }]);
+  assert.equal(fresh.added, 1);
+  const body2 = fs.readFileSync(f2, 'utf8');
+  assert.equal((body2.match(/我叫爱弥丝/g) || []).length, 1, "同一段话只能出现一次");
+  fs.rmSync(d2, { recursive: true, force: true });
+}
+
+console.log('test-lane-memory: 14 组断言通过');

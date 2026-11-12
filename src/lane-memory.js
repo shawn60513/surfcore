@@ -151,6 +151,29 @@ function normalizeForCompare(text) {
     .toLowerCase();
 }
 
+/** 兩段話的「字元二元組」重疊度；換了語序也能抓到同一件事。 */
+function tooSimilar(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const grams = (s) => {
+    const set = new Set();
+    for (let i = 0; i < s.length - 1; i += 1) set.add(s.slice(i, i + 2));
+    return set;
+  };
+  const ga = grams(a);
+  const gb = grams(b);
+  if (!ga.size || !gb.size) return false;
+  let hit = 0;
+  for (const g of ga) if (gb.has(g)) hit += 1;
+  return hit / Math.min(ga.size, gb.size) >= 0.6;
+}
+
+/** 只看「- 」條目；第一張的普通段落是身份錨點，不參與裁剪。 */
+function bulletLinesIn(lines, idxs) {
+  return idxs.filter((i) => /^\s*-\s+/.test(lines[i]));
+}
+
+
 /** 一章里最多留几条；超了就从最旧的开始丢，免得整章越滚越长。 */
 const MAX_BULLETS_PER_CHAPTER = 12;
 
@@ -165,7 +188,7 @@ function splitChapters(lines) {
       continue;
     }
     if (!cur) continue;
-    if (/^\s*-\s+/.test(lines[i])) out.get(cur).push(i);
+    if (lines[i].trim()) out.get(cur).push(i);
   }
   return out;
 }
@@ -194,7 +217,9 @@ export function appendCardEntries(cardFile, entries, at = new Date()) {
     const chapterLines = splitChapters(lines).get(entry.chapter) ?? [];
     const seen = chapterLines.some((i) => {
       const other = normalizeForCompare(lines[i]);
-      return other === norm || (norm.length > 8 && (other.includes(norm) || norm.includes(other)));
+      if (other === norm) return true;
+      if (norm.length > 8 && (other.includes(norm) || norm.includes(other))) return true;
+      return norm.length > 20 && tooSimilar(other, norm);
     });
     if (seen) {
       skipped += 1;
@@ -231,9 +256,10 @@ export function appendCardEntries(cardFile, entries, at = new Date()) {
   // 收尾：每章太长就从最旧的删（只删这一章开头的条目）。
   let trimmed = 0;
   for (const [, idxs] of splitChapters(lines)) {
-    const over = idxs.length - MAX_BULLETS_PER_CHAPTER;
+    const bullets = bulletLinesIn(lines, idxs);
+    const over = bullets.length - MAX_BULLETS_PER_CHAPTER;
     if (over <= 0) continue;
-    const drop = idxs.slice(0, over);
+    const drop = bullets.slice(0, over);
     for (const i of drop.sort((a, b) => b - a)) {
       lines.splice(i, 1);
       trimmed += 1;

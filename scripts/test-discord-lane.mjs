@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds } from '../src/discord-lane.js';
+import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -232,4 +232,16 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.deepEqual([c, a, b].sort(compareIds).map((x) => x.id), [a.id, b.id, c.id]);
 }
 
-console.log('test-discord-lane: 18 组断言通过');
+
+// 19) 主動開口四道門：閒置夠久、距上次主動夠久、現在不吵、而且她醒著
+{
+  const base = { idleOk: true, freshOk: true, quietNow: false, asleep: false };
+  assert.equal(mayOpenProactively(base), true);
+  assert.equal(mayOpenProactively({ ...base, idleOk: false }), false, '還沒閒置夠久就不打擾');
+  assert.equal(mayOpenProactively({ ...base, freshOk: false }), false, '剛主動過一次，別連著來');
+  assert.equal(mayOpenProactively({ ...base, quietNow: true }), false, '安靜時段不開口');
+  assert.equal(mayOpenProactively({ ...base, asleep: true }), false, '她在睡覺就不主動');
+  assert.equal(mayOpenProactively({}), false, '什麼都沒給＝不開口');
+}
+
+console.log('test-discord-lane: 19 组断言通过');

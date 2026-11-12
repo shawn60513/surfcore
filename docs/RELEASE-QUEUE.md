@@ -14,6 +14,25 @@
 
 ## 待发布
 
+## 2026-11-13 04:50 — 記憶卡去重（段落也算）+ 主動開口的四道門
+
+- 覆蓋提交：`（本批提交）`
+- 文件：`src/lane-memory.js`（`splitChapters()` 收段落、`tooSimilar()`、`bulletLinesIn()`）、`src/discord-lane.js`（`mayOpenProactively()`、睡著不主動開口、主動開口日誌帶上她當時在做什麼）、`scripts/test-lane-memory.mjs`（第 14 組）、`scripts/test-discord-lane.mjs`（第 19 組）
+- case：[`docs/cases/2026-11-13-memory-dedupe.md`](cases/2026-11-13-memory-dedupe.md)
+- 建議版本：**0.9.1 patch**
+- 影響面：寫卡去重與主動開口時機；她自己的作息裡「睡著」的時段不再主動私訊。
+- 回滾：`git revert <本批提交>`。
+
+**交接塊**
+
+```
+[surfcore] 記憶卡不再把第一章寫兩遍；主動開口要她醒著
+- splitChapters 連普通段落一起算，近似段落（二元組相似度 ≥0.6）不再重複寫
+- 裁剪只砍「- 」條目，第一章的身份段落不會被當成最舊條目刪掉
+- 主動開口四道門抽成 mayOpenProactively()：閒置夠久 / 距上次夠久 / 不在安靜時段 / 她醒著
+- 測試：test-lane-memory 14 組、test-discord-lane 19 組、test-audit 151/151
+```
+
 ## 2026-11-13 04:45 — 她有自己的「此刻」（日程與自我狀態注入）
 
 - 覆蓋提交：`2ecdb37`
