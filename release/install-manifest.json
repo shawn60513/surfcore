@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "version": "0.8.8",
   "source": "git:HEAD",
-  "generatedAt": "2026-11-12T21:44:15.803Z",
+  "generatedAt": "2026-11-12T22:00:23.016Z",
   "files": {
     ".gitignore": "df9b778e654706a89497277c5e725dddc5e9e0ab2675e5ff21cda9b7fae476c0",
     ".npmrc": "a093bb2fed59d699b7f9a62a5203cc196054c624e9c39c6d908c9e7db5dd2464",
@@ -13,7 +13,7 @@
     "README.md": "bf4d3869db33380005b171a9bff7f076a899290e49ae97178706105bc40ec34a",
     "RULES.md": "36c465ad9d58c99176a93de25ae7af80eb5a77bc88a5866e49cfeb23cf3135a6",
     "_snowluma-catalog.json": "775cf10d4622644eeb0506dea7a30125423e6c70342a2fae2f1b0818d2441cd6",
-    "config.example.json": "b842de3cc15d76a1189fbcc1c4ea886e36a0d4b7e110dbbe08ac79a5f691ceda",
+    "config.example.json": "df519cce61361366e25d42f33cad3c1050d0d70898c878210b6235ff81a7f125",
     "docs/ARCHITECTURE-DELTA-TOKEN.md": "7bbecf07507ad9bbb93754de3c31b1b6d0e6e148e5229eac8e92b62545093e6f",
     "docs/COORDINATION.md": "fac79adee220e2020b0ab6c927ccd665ac861f3063612d4ee72115eff839ee14",
     "docs/DISCORD-DM-LANE.md": "ce7b4f77e6e5a770604e2eaea2d2d788144b960987cd52595ade87fb3b802df9",
