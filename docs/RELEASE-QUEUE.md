@@ -30,7 +30,58 @@ feat(discord): 她自己的聲音——RVC v2 語音包接進語音回覆
 - 預設關閉：音色像不像要人耳判定，先用「（換聲測試）」樣本驗收
 ```
 
-## 待发布
+## 待发布 · 2026-11-13 05:25 · 換聲調音（對齊日配、預設打開）
+
+- **覆盖提交**：`0bc0560` + `ec17b8d`
+- **功能**：RVC 換聲預設打開（`f0up 6`、`index 0.5`、`rms 0.25`、`protect 0.5`），SAPI 語速 `rate 2 → 6`；啟動時預熱換聲工人。
+- **修 bug**：`vc_single` 失敗時 tuple 被當音訊、`HF_HOME` 未指定、暫存檔寫系統 Temp 被權限擋。
+- **檔案**：`src/rvc-voice.js`、`scripts/rvc/worker.py`、`src/discord-lane.js`、`config.example.json`、`docs/cases/2026-11-13-lane-rvc-voice.md`。
+- **case**：`docs/cases/2026-11-13-lane-rvc-voice.md`（新增「調音」一節）
+- **建議版本**：0.9.1 patch
+- **回滾**：`discord.lane.voice.rvc.enabled=false`、`rate` 調回 2。
+
+```text
+fix(discord): 換聲的音高與語速對齊日配，預設打開
+
+- 量日配（佐藤聪美）中位 F0 335–364 Hz，我們原本只有 176–184 Hz（低約一個八度）
+- f0up +6 → 307.7 Hz（−1.5 半音）；rate 2 → 6（同句 3.9s → 2.52s）
+- 三個真 bug：vc_single 失敗回 tuple 被當音訊、HF_HOME 未指定、暫存檔寫系統 Temp 被拒
+- 啟動時預熱工人，第一句語音不必等模型載入
+```
+
+## 待发布 · 2026-11-13 05:40 · 日記回讀（她記得昨天）
+
+- **覆盖提交**：`48fe88f` + `0c8a360`
+- **功能**：聊天時把**昨天**的日記摘錄（最多 2 行 / 220 字）注入提示詞，主動開口也帶著；主動開口不再塞口味提示。
+- **檔案**：`src/lane-memory.js`（`readRecentDiary`）、`src/discord-lane.js`（`recentDiaryLine`、兩處 prompt）、`scripts/test-lane-memory.mjs`。
+- **case**：`docs/cases/2026-11-13-lane-diary-recall.md`
+- **建議版本**：0.9.1 patch
+- **回滾**：刪掉兩處 `recentDiaryLine()` 呼叫即可（不影響寫入）。
+
+```text
+feat(discord): 她記得昨天說過什麼——日記回讀進提示詞
+
+- readRecentDiary：只取昨天（今天的在 history 里），太長從最舊的丟
+- replyPrompt / proactivePrompt 都帶上「你們昨天聊過」
+- 主動開口不再固定塞口味提示，改成從「未聊完的事」或她自己的日子挑
+```
+
+## 待发布 · 2026-11-13 05:45 · 主動開口校準 + 整理提示詞修正
+
+- **覆盖提交**：本批次
+- **功能**：安靜時段 23–8 → **4–10**（依他真實作息：23 點是他最活躍的時段）；新增 `proactiveChance`（預設 0.5，四道門都過也只有一半機會開口）；整理提示詞要求「話題」寫在左邊，解析接受「題目|…」的偏差寫法。
+- **檔案**：`src/discord-lane.js`、`src/lane-memory.js`、`scripts/test-discord-lane.mjs`、`scripts/test-lane-memory.mjs`、`config.example.json`。
+- **case**：`docs/cases/2026-11-13-lane-proactive-calibration.md`、`docs/cases/2026-11-13-consolidate-probe.md`
+- **建議版本**：0.9.1 patch
+- **回滾**：`quietStart/quietEnd` 調回 23/8、`proactiveChance` 設 1。
+
+```text
+fix(discord): 主動開口的安靜時段寫反了，而且像準點報時
+
+- 日記 80 條發言按小時統計：23 點最多（30 條），安靜時段卻從 23 點開始
+- quietStart/quietEnd 改 4/10；新增 proactiveChance 0.5（四道門都過也擲骰子）
+- 整理提示詞要求「話題」寫左邊；解析接受「題目|…」的偏差寫法（保留題目）
+```
 
 ## 2026-11-13 04:58 — 長訊息自動拆條 + 主動開口不重複
 

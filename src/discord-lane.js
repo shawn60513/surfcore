@@ -87,6 +87,19 @@ export function mayOpenProactively({ idleOk, freshOk, quietNow, asleep }) {
   return Boolean(idleOk && freshOk && !quietNow && !asleep);
 }
 
+/**
+ * 主動開口要不要真的開口。
+ *
+ * 四道門都過了還不是每次都開——不然就成了整點報時（他只要安靜 30 分鐘就收到一句）。
+ * 機率寫成純函式，測試才能固定骰子。
+ */
+export function openChanceHit(chance, random = Math.random()) {
+  const p = Math.min(1, Math.max(0, Number(chance)));
+  if (!(p > 0)) return false;
+  if (p >= 1) return true;
+  return Number(random) < p;
+}
+
 const TONE_CARD = '（你叫愛彌斯：粉髮金瞳、鳴潮來的、唱《紙飛機》；活潑、有點皮、嘴硬心軟。說話短，像手機打字，句尾愛帶～、愛用啦嘛呢噢；可以關心他但別講道理；偶爾講講你自己的事；他打繁體你就回繁體。）';
 
 // 他的口味不在人設裡（人設是每會話一次的大塊文字），改成「這一輪跟片子有關」才臨時帶一句，
@@ -509,6 +522,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
   const idleMinutes = clampMs(laneCfg.idleMinutes, DEFAULT_IDLE_MINUTES, 5, 24 * 60);
   const quiet = { start: laneCfg.quietStart ?? 23, end: laneCfg.quietEnd ?? 8 };
   const proactiveEnabled = laneCfg.proactive !== false;
+  const proactiveChance = Number(laneCfg.proactiveChance ?? 0.5);
   const memoryCard = String(laneCfg.memoryCard ?? '').trim();
   const memory = memoryLayout(memoryCard);
   // 「還沒聊完的事」+「她最近在忙什麼」：夜间整理时一并抽出来，主动开口时拿来接话。
@@ -1248,7 +1262,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
         const freshOk = now - (state.lastProactiveAt ?? 0) > idleMinutes * 60_000;
         // 她自己的作息：睡著的時段不主動開口（安靜時段之外，還有這一層）。
         const asleep = currentActivity(dayPlanFor(new Date()), new Date()).phase === 'sleep';
-        if (mayOpenProactively({ idleOk, freshOk, quietNow: hourInQuiet(now, quiet), asleep })) {
+        if (mayOpenProactively({ idleOk, freshOk, quietNow: hourInQuiet(now, quiet), asleep }) && openChanceHit(proactiveChance)) {
           state.lastProactiveAt = now;
           save();
           const text = await runTurn(proactivePrompt());

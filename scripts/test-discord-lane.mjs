@@ -1,4 +1,4 @@
-// Discord lane 回合归属回归：不碰网络、不发 Discord、不读真实配置。
+﻿// Discord lane 回合归属回归：不碰网络、不发 Discord、不读真实配置。
 //
 // 为什么值得一条测试：2026-11-05 那天，同一個 DSH 会话被三处写入
 // （DM lane 轮询 / @addozhang/dsh-discord gateway / dsh-speak-up 念头），
@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively, looksRepeated } from '../src/discord-lane.js';
+import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively, looksRepeated, openChanceHit } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -256,4 +256,15 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(looksRepeated('剛在湖邊坐了會兒，風有點涼', null), false, '沒有歷史就當沒重複');
 }
 
-console.log('test-discord-lane: 20 组断言通过');
+// 21) 四道門都過了還是擲骰子：不然閒置 30 分鐘就準時收到一句，像報時
+{
+  assert.equal(openChanceHit(1, 0.99), true, '1 = 一定開口');
+  assert.equal(openChanceHit(0, 0.01), false, '0 = 一定不開口');
+  assert.equal(openChanceHit(0.5, 0.49), true);
+  assert.equal(openChanceHit(0.5, 0.5), false, '0.5 的門檻剛好不含 0.5');
+  assert.equal(openChanceHit(2, 0.99), true, '大於 1 夾成 1');
+  assert.equal(openChanceHit(-1, 0.01), false, '負數夾成 0');
+  assert.equal(openChanceHit('0.3', 0.29), true, '字串也吃得下');
+}
+
+console.log('test-discord-lane: 21 组断言通过');

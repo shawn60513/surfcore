@@ -1,4 +1,4 @@
-// 记忆读写回归：不碰网络、不碰真实档案（全在临时目录）。
+﻿// 记忆读写回归：不碰网络、不碰真实档案（全在临时目录）。
 //
 // 事故背景：lane 只会「读」记忆卡摘要，她说的话永远写不回去；
 // 后来决定「日记自动记 + 每晚她自己挑重点」，这里守住写档那一段别写坏格式。
@@ -234,4 +234,18 @@ fs.rmSync(dir, { recursive: true, force: true });
   fs.rmSync(d3, { recursive: true, force: true });
 }
 
-console.log('test-lane-memory: 15 组断言通过');
+// 16) 模型把「話題」寫成題目名也要吃得下：左邊不是章號/自己/話題 → 當未聊完的事
+{
+  const parsed = parseConsolidateExtra([
+    '六|第一次一起看星星。',
+    '深空當舖|他真去玩了，說下次也想讓我玩到。',
+    '自己|在練歌。',
+    '這行沒有分隔號',
+  ].join(nl));
+  assert.equal(parsed.entries.length, 1);
+  assert.equal(parsed.loops.length, 1, '题目当标签也要收下来');
+  assert.equal(parsed.loops[0].includes('深空當舖'), true);
+  assert.equal(parsed.self, '在練歌。');
+}
+
+console.log('test-lane-memory: 16 组断言通过');

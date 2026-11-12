@@ -421,8 +421,8 @@
       "userId": "",
       "pollMs": 60000,
       "idleMinutes": 120,
-      "quietStart": 23,
-      "quietEnd": 8,
+      "quietStart": 4,
+      "quietEnd": 10,
       "proactive": true,
       "memoryCard": "",
       "consolidateHour": 23,
@@ -444,7 +444,8 @@
           "filterRadius": 3,
           "timeoutMs": 120000
         }
-      }
+      },
+      "proactiveChance": 0.5
     },
     "mentionUsers": [],
     "pingOnReply": true,

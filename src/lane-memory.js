@@ -127,6 +127,7 @@ export function buildConsolidatePrompt(diaryText) {
     '只寫新的、以後還用得上的；流水賬、寒暄、已經記過的不寫。',
     '',
     '第二部分：挑最多 2 件「話還沒說完的事」（他提過但還沒結果的），每行一條，格式：話題|一句話',
+    '左邊固定寫「話題」兩個字，不要把題目放左邊；題目寫在右邊那句話裡。',
     '例如：話題|他明天要去驗車，說回來再講結果。沒有就整段不寫。',
     '',
     '第三部分：用一句話寫你最近在忙什麼（練歌／看片／在湖邊），格式：自己|一句話。沒什麼好寫就整段不寫。',
@@ -150,19 +151,29 @@ export function parseConsolidateExtra(text) {
     const line = raw.replace(/^[-*\s]+/, '').trim();
     if (!line) continue;
     const m = /^([一二三四五六七八]|話題|话题|自己)[｜|、.]?\s*[|｜]\s*(.+)$/.exec(line);
-    if (!m) continue;
-    const body = oneLine(m[2], 300);
-    if (!body) continue;
-    if (m[1] === '話題' || m[1] === '话题') {
-      if (loops.length < 2) loops.push(body);
+    if (m) {
+      const body = oneLine(m[2], 300);
+      if (!body) continue;
+      if (m[1] === '話題' || m[1] === '话题') {
+        if (loops.length < 2) loops.push(body);
+        continue;
+      }
+      if (m[1] === '自己') {
+        self = body;
+        continue;
+      }
+      if (!CARD_CHAPTERS.has(m[1])) continue;
+      entries.push({ chapter: m[1], text: body });
       continue;
     }
-    if (m[1] === '自己') {
-      self = body;
-      continue;
-    }
-    if (!CARD_CHAPTERS.has(m[1])) continue;
-    entries.push({ chapter: m[1], text: body });
+    // 模型有时会把「話題」那一段写成本来的题目（`深空當舖|他真去玩了…`）：
+    // 左边的标签不是章号、不是「自己」，就当「未聊完的事」，把题目留在正文里。
+    const loose = /^([^|｜]{1,8})[|｜]\s*(.+)$/.exec(line);
+    if (!loose) continue;
+    const label = loose[1].trim();
+    if (!label || label === '自己' || label === '話題' || label === '话题') continue;
+    const body = oneLine(`${label}：${loose[2]}`, 300);
+    if (body && loops.length < 2) loops.push(body);
   }
   return { entries, loops, self };
 }
