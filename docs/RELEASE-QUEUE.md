@@ -12,6 +12,27 @@
 
 ---
 
+## 待發布 · 2026-11-13 06:50 · 她的聲音改成 GPT-SoVITS v4（GPU）
+
+- **覆蓋提交**：本批次
+- **功能**：`src/gsv-voice.js`（常駐合成工人的 Node 包裝）、`scripts/gsv/worker.py`（一行一 JSON、模型只載一次）、`src/discord-lane.js` 的 `gsvVoice()`＋`maybeSendVoice()` 改成「GSV 優先、SAPI+RVC 兜底」＋開機預熱；`config.json` 新增 `discord.lane.voice.gsv`（`config.example.json` 為 `enabled:false`）。
+- **實測**（RTX 5060 Laptop / 8 GB / 驅動 621.14）：工人啟動 27.1 秒（預熱）、第一句 11.2 秒、之後 **4.3–4.5 秒／3.8–4.4 秒音檔**（約 1.1 倍實時，48 kHz）。CPU 對照 21 倍實時。
+- **檔案**：`src/gsv-voice.js`、`scripts/gsv/worker.py`、`src/discord-lane.js`、`config.json`、`config.example.json`、`docs/cases/2026-11-13-lane-gsv-voice.md`
+- **case**：`docs/cases/2026-11-13-lane-gsv-voice.md`
+- **建議版本**：0.9.1 patch
+- **回滾**：`voice.gsv.enabled=false`（立刻退回 SAPI+RVC，不必改代碼）。
+
+```text
+feat(voice): 她的聲音換成 GPT-SoVITS v4，在 5060 上用 GPU 跑
+
+- 之前 SAPI+RVC 只換音色、腔調還是朗讀腔；GPT-SoVITS 是原生中文 TTS
+- CPU 21 倍實時跑不動，換 torch 2.8.0+cu128（sm_120）後 1.1 倍實時
+- 新增常駐工人（一行一 JSON）與 src/gsv-voice.js；lane 改成 GSV 優先、SAPI+RVC 兜底
+- 開機預熱 27 秒，之後每句 4.3–4.5 秒（3.8–4.4 秒音檔）
+```
+
+---
+
 ## 待发布 · 2026-11-13 06:15 · 換聲第二輪調音（速度／音高／電子音）
 
 - **覆盖提交**：本批次

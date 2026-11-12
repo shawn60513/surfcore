@@ -30,6 +30,7 @@ import {
 import { readPersonaLayerText } from './character-persona.js';
 import { pickSpeakLine, shouldSpeak, synthesizeWav } from './tts.js';
 import { createRvcVoice } from './rvc-voice.js';
+import { createGsvVoice } from './gsv-voice.js';
 import { buildDayPlan, currentActivity, formatSelfLine } from './lane-day.js';
 import { discoverDshBaseUrl, isLoopbackBaseUrl, probeDshBaseUrl } from './dsh-port.js';
 
@@ -688,6 +689,33 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     return rvcVoiceInstance;
   }
 
+  // GPT-SoVITS（原生中文、她自己的音色）：優先於 SAPI + 換聲。第一次用到才起工人。
+  let gsvVoiceInstance = null;
+  function gsvVoice() {
+    const gsvCfg = (laneCfg.voice ?? {}).gsv ?? {};
+    if (gsvCfg.enabled !== true) return null;
+    if (gsvVoiceInstance) return gsvVoiceInstance;
+    const resolvePath = (value, fallback) => {
+      const raw = String(value ?? fallback ?? "");
+      if (!raw) return "";
+      return path.isAbsolute(raw) ? raw : path.join(root, raw);
+    };
+    try {
+      gsvVoiceInstance = createGsvVoice({
+        pythonPath: resolvePath(gsvCfg.python, "state/gsv/gsv/Scripts/python.exe"),
+        workerPath: resolvePath(gsvCfg.worker, "scripts/gsv/worker.py"),
+        configPath: resolvePath(gsvCfg.config, "state/gsv/tts_config.yaml"),
+        packDir: resolvePath(gsvCfg.packDir, "state/gsv/pack"),
+        timeoutMs: Number(gsvCfg.timeoutMs ?? 180000),
+        logger: (message) => log(message),
+      });
+    } catch (error) {
+      log(`Discord lane：原生語音工人起不來（${error && error.message ? error.message : error}）`);
+      return null;
+    }
+    return gsvVoiceInstance;
+  }
+
   /**
    * 偶爾配一條語音：把最後一句唸出來丟過去。
    * 語音壞了不影響文字（文字早就送出去了），只記一條 log。
@@ -701,30 +729,53 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     const line = pickSpeakLine(text, maxChars);
     if (!shouldSpeak(line, { maxChars })) return;
     let file = '';
+    const temps = new Set();
     try {
       // 暫存放工作區（state/voice-tmp）：系統 Temp 在沙箱下不一定可寫，
       // 而且換聲工人（python）也要寫同一個目錄。
       const voiceDir = path.join(root, 'state', 'voice-tmp');
       fs.mkdirSync(voiceDir, { recursive: true });
-      file = await synthesizeWav(line, { rate: Number(voiceCfg.rate ?? 2), outDir: voiceDir });
-      let voiced = file;
-      const rvc = rvcVoice();
-      if (rvc) {
-        const converted = file.replace(/\.wav$/i, '.rvc.wav');
-        const result = await rvc.convert({
-          input: file,
-          output: converted,
-          f0up: Number(voiceCfg.rvc?.f0up ?? 0),
-          indexRate: Number(voiceCfg.rvc?.indexRate ?? 0.5),
-          protect: Number(voiceCfg.rvc?.protect ?? 0.5),
-          rmsMixRate: Number(voiceCfg.rvc?.rmsMixRate ?? 0.25),
-          filterRadius: Number(voiceCfg.rvc?.filterRadius ?? 3),
+      let voiced = '';
+      // 首選：GPT-SoVITS 原生中文（她的音色）。工人沒開或這句失敗才往下退。
+      const gsv = gsvVoice();
+      if (gsv) {
+        const nativeFile = path.join(voiceDir, `aimisi-gsv-${Date.now()}.wav`);
+        temps.add(nativeFile);
+        const said = await gsv.speak({
+          text: line,
+          output: nativeFile,
+          speed: Number(voiceCfg.gsv?.speed ?? 1),
         });
-        if (result.ok) {
-          voiced = converted;
+        if (said.ok) {
+          voiced = nativeFile;
+          log(`Discord lane：原生語音（${(said.ms / 1000).toFixed(1)}s / ${said.dur}s 音檔）`);
         } else {
-          log(`Discord lane：換聲沒成功（${result.error}），這句用原聲`);
+          log(`Discord lane：原生語音沒成功（${said.error}），這句退回 SAPI`);
         }
+      }
+      file = voiced || (await synthesizeWav(line, { rate: Number(voiceCfg.rate ?? 2), outDir: voiceDir }));
+      temps.add(file);
+      if (!voiced) {
+        const rvc = rvcVoice();
+        if (rvc) {
+          const converted = file.replace(/\.wav$/i, '.rvc.wav');
+          temps.add(converted);
+          const result = await rvc.convert({
+            input: file,
+            output: converted,
+            f0up: Number(voiceCfg.rvc?.f0up ?? 0),
+            indexRate: Number(voiceCfg.rvc?.indexRate ?? 0.5),
+            protect: Number(voiceCfg.rvc?.protect ?? 0.5),
+            rmsMixRate: Number(voiceCfg.rvc?.rmsMixRate ?? 0.25),
+            filterRadius: Number(voiceCfg.rvc?.filterRadius ?? 3),
+          });
+          if (result.ok) {
+            voiced = converted;
+          } else {
+            log(`Discord lane：換聲沒成功（${result.error}），這句用原聲`);
+          }
+        }
+        voiced = voiced || file;
       }
       const data = fs.readFileSync(voiced);
       const channelId = await ensureDm();
@@ -736,7 +787,9 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     } catch (error) {
       log(`Discord lane：語音沒送出去（${error?.code ?? error?.message ?? error}）`);
     } finally {
-      if (file) { try { fs.unlinkSync(file); } catch {} }
+      for (const temp of temps) {
+        try { fs.unlinkSync(temp); } catch {}
+      }
       if (file) { try { fs.unlinkSync(file.replace(/\.wav$/i, '.rvc.wav')); } catch {} }
     }
   }
@@ -1382,6 +1435,13 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
         return;
       }
       connectEvents();
+      // 原生語音工人要先載 220MB 權重（十幾秒）：開機就先暖著，第一句才不用等。
+      const warmGsv = gsvVoice();
+      if (warmGsv) {
+        warmGsv.start()
+          .then((ok) => log(ok ? 'Discord lane：原生語音工人已預熱（她的音色）' : 'Discord lane：原生語音工人沒起來，先走 SAPI'))
+          .catch((error) => log(`Discord lane：原生語音預熱失敗（${error?.message ?? error}），要用的時候再冷啟`));
+      }
       // 換聲工人載入模型要十幾秒：開機就先暖著，第一句語音才不用等。
       const warmRvc = rvcVoice();
       if (warmRvc) {

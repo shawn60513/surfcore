@@ -289,6 +289,7 @@ const tests = [
   'test-mcp-discord.mjs',
   'test-tts.mjs',
   'test-rvc-voice.mjs',
+  'test-gsv-voice.mjs',
   'test-discord-split.mjs',
   'test-discord-lane.mjs',
   'test-lane-day.mjs',

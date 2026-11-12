@@ -443,6 +443,15 @@
           "rmsMixRate": 0.45,
           "filterRadius": 3,
           "timeoutMs": 120000
+        },
+        "gsv": {
+          "enabled": false,
+          "python": "state/gsv/gsv/Scripts/python.exe",
+          "worker": "scripts/gsv/worker.py",
+          "config": "state/gsv/tts_config.yaml",
+          "packDir": "state/gsv/pack",
+          "speed": 1,
+          "timeoutMs": 180000
         }
       },
       "proactiveChance": 0.5
