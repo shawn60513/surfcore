@@ -64,3 +64,56 @@ fairseq 沒有 3.12 的輪子、也編不過。**沒有降級 Python**，改把 
 - CPU 上每句 3–4 秒；要更快得導出 ONNX 或換 GPU（這台沒有）。
 - 模型與 venv 都在 `state/`（被 `.gitignore` 蓋住，約 1.4 GB），不進 repo。
 - 只有 `rmvpe` 一條音高路；若哪天要 harvest，得裝 `pyworld`。
+
+## 調音（2026-11-13 05:20）
+
+用户原话：「聲音速度太慢而且有點低了,而且有電子音,你自己去比對日配的小愛慢慢調整」。
+
+### 先量基準
+
+日配（佐藤聪美）語音合集 `BV1Lbcvz5ECX`，用 yt-dlp 抓兩個分 P 到 `state/voice-ref/`：
+
+| 檔案 | 長度 | 中位 F0 | 頻譜重心 |
+| --- | --- | --- | --- |
+| `jp_ref.wav`（p6） | 231.2 s | 363.4 Hz | 2,088 Hz |
+| `jp_p3.wav`（p3） | 75.7 s | 335.1 Hz | 1,906 Hz |
+
+我們原本的輸出（pyin 與自相關法互相驗證）：
+
+| 檔案 | 中位 F0 | 對日配 |
+| --- | --- | --- |
+| `s1.wav`（SAPI，rate 2） | 183.9 Hz | −12.6 半音 |
+| `s1_rvc.wav`（過換聲） | 178.2 Hz | −13.0 半音 |
+| `s3_rvc.wav` | 175.6 Hz | −12.4 半音 |
+
+所以「太低」不是感覺：**整整低了一個八度附近**。原因有兩層——SAPI 的 Hanhan 本來就偏低（219 Hz），RVC 的 `f0up=0` 又照原樣搬過去。
+
+速度：同一句 20 字，SAPI `rate` 0/3/6/9 分別是 4.87/3.50/2.52/1.81 秒；原本 `rate:2` ≈ 3.9 秒，比日配慢。
+
+### 網格（f0up × index × rms）
+
+| 變體 | 參數 | 中位 F0 | 對日配 |
+| --- | --- | --- | --- |
+| p0 | f0up 0, index .5, rms .25 | 213.3 Hz | −7.8 st |
+| p3 | f0up +3 | 258.1 Hz | −4.5 st |
+| p6 | f0up +6 | 307.7 Hz | −1.5 st |
+| p6idx35 | f0up +6, index .35 | 307.7 Hz | −1.5 st |
+| p9 | f0up +9 | 347.8 Hz | +0.7 st |
+
+`f0up` 每 +3 半音約 +49 Hz；`index_rate`/`rms_mix_rate` 只改音色不改音高。樣本 A/B/C/D 與「手感測試」都發到 DM 讓用户自己聽。
+
+### 這輪順手修掉的三個真 bug
+
+1. **錯誤被吞掉**：`rvc_python.infer_file()` 直接對 `vc_single()` 的回傳值 `wavfile.write`，而失敗時它回的是 `(traceback, (None,None))` 這個 tuple → 外面只看到 `AttributeError: 'tuple' object has no attribute 'dtype'`，真因全在字串裡。改成工人自己呼叫 `vc_single()`，tuple 時 `raise RuntimeError(最後一行)`。
+2. **HF 快取被權限擋**：`~/.cache/huggingface` 這台機器寫不進去（下載 ContentVec 失敗），統一改吃 `HF_HOME=state/voice-src/hf`。
+3. **系統 Temp 不可寫**：換聲工人寫 `.rvc.wav` 時 `PermissionError`，改成 `synthesizeWav(..., { outDir: state/voice-tmp })`，暫存與換聲檔放同一個工作區目錄，`finally` 一起刪。
+
+### 預設
+
+`f0up 6`（−1.5 半音）、`index 0.5`、`rms 0.25`、`protect 0.5`、`rate 6`；啟動時預熱工人（模型只載一次，第一句不用等十幾秒）。
+
+### 遺留
+
+- 「電子音」只有人耳能判，參數緩解不了的部分要靠更好的底模或更乾淨的來源音；
+- 日配 p1/p2 被 B 站反爬 567 擋，只量了兩個分 P；
+- 工人冷啟 9.9 秒、預熱後每句 2.2–2.3 秒。

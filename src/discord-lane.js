@@ -661,6 +661,9 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
         pythonPath: resolvePath(rvcCfg.python, "state/voice-venv/Scripts/python.exe"),
         workerPath: resolvePath(rvcCfg.worker, "scripts/rvc/worker.py"),
         modelDir: resolvePath(rvcCfg.modelDir, "state/voice-model"),
+        // ContentVec 的 HF 快取：預設 ~/.cache/huggingface 在這台機器會被權限擋住，
+        // 統一收到 state/ 底下，順便讓模型只下載一次。
+        env: { HF_HOME: resolvePath(rvcCfg.hfHome, "state/voice-src/hf") },
         timeoutMs: Number(rvcCfg.timeoutMs ?? 120000),
         logger: (message) => log(message),
       });
@@ -685,7 +688,11 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     if (!shouldSpeak(line, { maxChars })) return;
     let file = '';
     try {
-      file = await synthesizeWav(line, { rate: Number(voiceCfg.rate ?? 2) });
+      // 暫存放工作區（state/voice-tmp）：系統 Temp 在沙箱下不一定可寫，
+      // 而且換聲工人（python）也要寫同一個目錄。
+      const voiceDir = path.join(root, 'state', 'voice-tmp');
+      fs.mkdirSync(voiceDir, { recursive: true });
+      file = await synthesizeWav(line, { rate: Number(voiceCfg.rate ?? 2), outDir: voiceDir });
       let voiced = file;
       const rvc = rvcVoice();
       if (rvc) {
@@ -694,7 +701,10 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
           input: file,
           output: converted,
           f0up: Number(voiceCfg.rvc?.f0up ?? 0),
-          indexRate: Number(voiceCfg.rvc?.indexRate ?? 0.75),
+          indexRate: Number(voiceCfg.rvc?.indexRate ?? 0.5),
+          protect: Number(voiceCfg.rvc?.protect ?? 0.5),
+          rmsMixRate: Number(voiceCfg.rvc?.rmsMixRate ?? 0.25),
+          filterRadius: Number(voiceCfg.rvc?.filterRadius ?? 3),
         });
         if (result.ok) {
           voiced = converted;
@@ -1342,6 +1352,13 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
         return;
       }
       connectEvents();
+      // 換聲工人載入模型要十幾秒：開機就先暖著，第一句語音才不用等。
+      const warmRvc = rvcVoice();
+      if (warmRvc) {
+        warmRvc.start()
+          .then(() => log('Discord lane：換聲工人已預熱（第一句語音不用等模型載入）'))
+          .catch((error) => log(`Discord lane：換聲工人預熱失敗（${error?.message ?? error}），要用的時候再冷啟`));
+      }
       await tick();
       if (once) return;
       setInterval(() => { tick(); }, pollMs);

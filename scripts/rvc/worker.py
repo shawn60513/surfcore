@@ -32,6 +32,8 @@ def _stdout_to_stderr():
 
 import infer_aimisi as ia  # noqa: E402  applies the fairseq/contentvec patches
 
+import numpy as np  # noqa: E402
+from scipy.io import wavfile  # noqa: E402
 from rvc_python.infer import RVCInference  # noqa: E402
 
 
@@ -45,6 +47,40 @@ def load_model():
     rvc.load_model(os.path.join(model_dir, pth), version="v2",
                    index_path=os.path.join(model_dir, index[0]) if index else "")
     return rvc
+
+
+def convert(rvc, req):
+    """Run one conversion.
+
+    rvc_python's infer_file() does `wavfile.write(..., wav_opt)` without checking
+    for the failure shape: on any internal error vc_single() returns
+    `(traceback_text, (None, None))`, and the real cause is hidden behind
+    "'tuple' object has no attribute 'dtype'". So we call vc_single() ourselves
+    and surface that message instead of guessing.
+    """
+    res = rvc.vc.vc_single(
+        sid=0,
+        input_audio_path=req["in"],
+        f0_up_key=int(req.get("f0up", 0)),
+        f0_method=rvc.f0method,
+        file_index=rvc.models[rvc.current_model].get("index", ""),
+        index_rate=float(req.get("index", 0.75)),
+        filter_radius=int(req.get("filter", 3)),
+        resample_sr=int(req.get("resample", rvc.resample_sr)),
+        rms_mix_rate=float(req.get("rms", 1.0)),
+        protect=float(req.get("protect", 0.33)),
+        f0_file="",
+        file_index2="",
+    )
+    if isinstance(res, tuple):  # (error text, (None, None))
+        raise RuntimeError(str(res[0]).strip().splitlines()[-1] if res else "vc_single failed")
+
+    audio = res
+    sr = int(rvc.vc.tgt_sr)
+    if audio.dtype != np.int16:
+        audio = np.clip(audio, -1.0, 1.0)
+        audio = (audio * 32767.0).astype(np.int16)
+    wavfile.write(req["out"], sr, audio)
 
 
 def main():
@@ -67,15 +103,19 @@ def main():
         rid = req.get("id")
         t0 = time.time()
         try:
-            rvc.set_params(
-                f0up_key=int(req.get("f0up", 0)),
-                index_rate=float(req.get("index", 0.75)),
-            )
             with _stdout_to_stderr():
-                rvc.infer_file(req["in"], req["out"])
+                convert(rvc, req)
             out = {"id": rid, "ok": True, "ms": int((time.time() - t0) * 1000)}
         except Exception as exc:  # keep the worker alive even if one file fails
-            out = {"id": rid, "ok": False, "error": "%s: %s" % (type(exc).__name__, exc)}
+            import traceback
+
+            tb = traceback.format_exc().strip().splitlines()[-3:]
+            out = {
+                "id": rid,
+                "ok": False,
+                "error": "%s: %s" % (type(exc).__name__, exc),
+                "where": " | ".join(line.strip() for line in tb),
+            }
         _real_stdout.write(json.dumps(out) + "\n")
         _real_stdout.flush()
     return 0

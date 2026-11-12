@@ -50,7 +50,7 @@ export function createRvcVoice({
     pending.delete(msg.id);
     clearTimeout(entry.timer);
     if (msg.ok) entry.resolve({ ok: true, ms: Number(msg.ms) || 0 });
-    else entry.resolve({ ok: false, error: String(msg.error ?? 'unknown') });
+    else entry.resolve({ ok: false, error: String(msg.error ?? 'unknown'), where: msg.where ? String(msg.where) : '' });
   }
 
   function wire(proc) {
@@ -130,7 +130,7 @@ export function createRvcVoice({
   }
 
   /** 把一個 wav 換成她的音色；成功回 { ok:true, ms }，失敗回 { ok:false, error }。 */
-  function convert({ input, output, f0up = 0, indexRate = 0.75 } = {}) {
+  function convert({ input, output, f0up = 0, indexRate = 0.75, protect = 0.33, rmsMixRate = 1, filterRadius = 3 } = {}) {
     const job = async () => {
       const ok = await start();
       if (!ok) return { ok: false, error: 'worker-not-started' };
@@ -141,7 +141,16 @@ export function createRvcVoice({
           resolve({ ok: false, error: 'timeout' });
         }, timeoutMs);
         pending.set(id, { resolve, timer });
-        const line = JSON.stringify({ id, in: input, out: output, f0up, index: indexRate });
+        const line = JSON.stringify({
+          id,
+          in: input,
+          out: output,
+          f0up,
+          index: indexRate,
+          protect,
+          rms: rmsMixRate,
+          filter: filterRadius,
+        });
         try {
           child.stdin.write(line + '\n');
         } catch (error) {

@@ -430,14 +430,18 @@
         "enabled": false,
         "chance": 0.35,
         "maxChars": 60,
-        "rate": 2,
+        "rate": 6,
         "rvc": {
           "enabled": false,
           "python": "state/voice-venv/Scripts/python.exe",
           "worker": "scripts/rvc/worker.py",
           "modelDir": "state/voice-model",
-          "indexRate": 0.75,
-          "f0up": 0,
+          "hfHome": "state/voice-src/hf",
+          "f0up": 6,
+          "indexRate": 0.5,
+          "protect": 0.5,
+          "rmsMixRate": 0.25,
+          "filterRadius": 3,
           "timeoutMs": 120000
         }
       }
