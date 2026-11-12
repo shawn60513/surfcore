@@ -77,6 +77,45 @@ export function readDiary(layout, date = dayStamp()) {
 }
 
 /**
+ * 「你还记得刚才/昨天聊过什么」：把最近一两天的日记压成几行。
+ *
+ * 只取最近 4 行、从最新的往回拼，超过 maxChars 就从最旧那行开始丢——
+ * 记忆卡是长期结论，这里补的是「热乎的上下文」。
+ */
+export function readRecentDiary(layout, { now = new Date(), days = 2, maxChars = 260, maxLines = 4 } = {}) {
+  if (!layout) return '';
+  const picked = [];
+  for (let back = 0; back < Math.max(1, days) && picked.length < maxLines; back += 1) {
+    const at = new Date(now.getTime() - back * 86_400_000);
+    const date = dayStamp(at);
+    const text = readDiary(layout, date);
+    if (!text) continue;
+    const lines = text
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('- '))
+      .map((line) => {
+        const m = /^-\s+\*\*(\d{2}:\d{2})\*\*\s*(.*)$/.exec(line);
+        if (!m) return '';
+        const stamp = date.slice(5);
+        return `${stamp} ${m[1]} ${m[2]}`;
+      })
+      .filter(Boolean);
+    for (let i = lines.length - 1; i >= 0 && picked.length < maxLines; i -= 1) {
+      picked.push(lines[i]);
+    }
+  }
+  if (!picked.length) return '';
+  picked.reverse();
+  // 太長就從最舊那行開始丟，保證留下的都是最近的。
+  let lines = picked.slice();
+  const joined = () => lines.join('\n');
+  while (lines.length > 1 && joined().length > maxChars) lines = lines.slice(1);
+  const out = joined();
+  return out.length > maxChars ? `${out.slice(out.length - maxChars)}…` : out;
+}
+
+/**
  * 整理用的提示词：只让她「挑 + 标章号」，不让她写文件。
  */
 export function buildConsolidatePrompt(diaryText) {

@@ -13,7 +13,7 @@
 // 限制：只走 REST（沒有 gateway），所以是輪詢（預設 60s），不是即時推送。
 import fs from 'node:fs';
 import path from 'node:path';
-import { appendCardEntries, appendDiary, buildConsolidatePrompt, dayStamp, memoryLayout, parseConsolidateExtra, pinFishMemoryOff, pruneForeignBindings, readDiary, shouldConsolidate } from './lane-memory.js';
+import { appendCardEntries, appendDiary, buildConsolidatePrompt, dayStamp, memoryLayout, parseConsolidateExtra, pinFishMemoryOff, pruneForeignBindings, readDiary, readRecentDiary, shouldConsolidate } from './lane-memory.js';
 import { pathToFileURL } from 'node:url';
 const FISH_MEMORY_CONFIG = () => path.join(process.env.USERPROFILE || process.env.HOME || '', '.dsh', 'fish-memory-config.json');
 
@@ -1000,6 +1000,12 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     return formatSelfLine(activity);
   }
 
+  /** 「你們昨天聊過」：最近的日記摘錄，補記憶卡（長期結論）之外的热乎上下文。 */
+  function recentDiaryLine() {
+    const recent = readRecentDiary(memory, { maxChars: 240, maxLines: 3 });
+    return recent ? `（你們最近聊過：\n${recent}）` : '';
+  }
+
   function replyPrompt(name, text) {
     const log2 = history()
       .map((m) => `${m.role === 'user' ? '對方' : '你'}：${m.content}`)
@@ -1017,6 +1023,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
       remember ? `你記得：${remember}` : '',
       selfBusy ? `（你最近在忙：${selfBusy}）` : '',
       selfLine(),
+      recentDiaryLine(),
       hasLink(text) ? LINK_HINT : '',
       tasteHint(text),
       log2 ? `（你們聊過的）\n${log2}` : '',
@@ -1051,15 +1058,16 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     const loopsHint = loops.loops.length ? loops.loops.join('；') : '';
     return [
       '（Discord 私訊）你剛好在想對方，想主動私訊找他講一句話。',
-      tasteHint('推薦'),
       TONE_CARD,
-      '給一句自然的開場（1–2 句），可以延續最近聊過的事，也可以只是想到他。',
+      '開場優先從「話還沒說完的事」或你自己的一天裡挑一件——想到什麼就講什麼。',
+      '如果只是打招呼，就別順便問問題；想問也只問一個。',
       '如果現在完全不適合開口（他在忙、時候不對、你沒話說），就只回一個字：跳過。',
       '',
       `（${timeLine(new Date(), Number(history().at(-1)?.at ?? 0))}）`,
       loopsHint ? `（話還沒說完的事：${loopsHint}——可以順口問一句，別像在催報告。）` : '',
       loops.self ? `（你最近在忙：${loops.self}）` : '',
       selfLine(),
+      recentDiaryLine(),
       '',
       remember ? `（你記得的事：${remember}）` : '',
       '',

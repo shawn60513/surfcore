@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { appendCardEntries, appendDiary, buildConsolidatePrompt, clockStamp, dayStamp, foreignBindings, memoryLayout, parseConsolidate, parseConsolidateExtra, pruneForeignBindings, readDiary, shouldConsolidate, pinFishMemoryOff } from '../src/lane-memory.js';
+import { appendCardEntries, appendDiary, buildConsolidatePrompt, clockStamp, dayStamp, foreignBindings, memoryLayout, parseConsolidate, parseConsolidateExtra, pruneForeignBindings, readDiary, readRecentDiary, shouldConsolidate, pinFishMemoryOff } from '../src/lane-memory.js';
 
 const nl = String.fromCharCode(10);
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lane-memory-'));
@@ -211,4 +211,27 @@ fs.rmSync(dir, { recursive: true, force: true });
   fs.rmSync(d2, { recursive: true, force: true });
 }
 
-console.log('test-lane-memory: 14 组断言通过');
+// 15) 「你们最近聊过」：只取最近几行、昨天也认得、太长从最旧的丢。
+{
+  const d3 = fs.mkdtempSync(path.join(os.tmpdir(), 'recent-diary-'));
+  const c3 = path.join(d3, 'card.md');
+  fs.writeFileSync(c3, ['## 三｜对方是谁', '- 他叫上午不顺'].join(nl), 'utf8');
+  const l3 = memoryLayout(c3);
+  const today = new Date(2026, 10, 13, 20, 0, 0);
+  const yesterday = new Date(2026, 10, 12, 21, 30, 0);
+  assert.equal(readRecentDiary(l3, { now: today }), '', '还没写过日记 = 空串');
+  appendDiary(l3, { at: yesterday, user: '今天好累喔', assistant: '那就别做了，我陪你' });
+  appendDiary(l3, { at: today, user: '在吗', assistant: '在～刚在湖边' });
+  const recent = readRecentDiary(l3, { now: today, maxChars: 400 });
+  assert.equal(recent.includes('11-13 20:00'), true, '今天的要认得');
+  assert.equal(recent.includes('11-12 21:30'), true, '昨天的也要认得');
+  const tight = readRecentDiary(l3, { now: today, maxChars: 40, maxLines: 4 });
+  assert.equal(tight.includes('11-13'), true, '太短时留下最新的那条');
+  assert.equal(tight.length <= 41, true);
+  const onlyToday = readRecentDiary(l3, { now: today, days: 1, maxChars: 400 });
+  assert.equal(onlyToday.includes('11-13'), true);
+  assert.equal(onlyToday.includes('11-12'), false, 'days:1 不许往回看');
+  fs.rmSync(d3, { recursive: true, force: true });
+}
+
+console.log('test-lane-memory: 15 组断言通过');
