@@ -82,10 +82,17 @@ export function readDiary(layout, date = dayStamp()) {
 export function buildConsolidatePrompt(diaryText) {
   return [
     '（整理記憶，不是聊天）下面是你今天跟他說過的話。',
-    '挑最多 3 條值得長期記住的，每行一條，格式：章號|內容',
+    '',
+    '第一部分：挑最多 3 條值得長期記住的，每行一條，格式：章號|內容',
     '章號只能用：三（他是誰／他的事）、五（你們的約定）、六（難忘的時刻）。',
     '只寫新的、以後還用得上的；流水賬、寒暄、已經記過的不寫。',
-    '如果今天沒有值得記的，只回一個字：沒有。',
+    '',
+    '第二部分：挑最多 2 件「話還沒說完的事」（他提過但還沒結果的），每行一條，格式：話題|一句話',
+    '例如：話題|他明天要去驗車，說回來再講結果。沒有就整段不寫。',
+    '',
+    '第三部分：用一句話寫你最近在忙什麼（練歌／看片／在湖邊），格式：自己|一句話。沒什麼好寫就整段不寫。',
+    '',
+    '如果今天完全沒有值得記的，只回一個字：沒有。',
     '',
     '今天的對話：',
     diaryText.trim(),
@@ -93,22 +100,37 @@ export function buildConsolidatePrompt(diaryText) {
 }
 
 /**
- * 解析整理结果：`三|他喜欢猫` 这种行。
+ * 解析整理结果：`三|他喜欢猫` 这种行，外加 `話題|…` 与 `自己|…`。
  * 不认的行直接丢（模型偶尔会写解释、空行、markdown 列表）。
  */
-export function parseConsolidate(text) {
-  const out = [];
+export function parseConsolidateExtra(text) {
+  const entries = [];
+  const loops = [];
+  let self = '';
   for (const raw of String(text ?? '').split(/\r?\n/)) {
     const line = raw.replace(/^[-*\s]+/, '').trim();
     if (!line) continue;
-    const m = /^([一二三四五六七八])[｜|、.]?\s*[|｜]\s*(.+)$/.exec(line);
+    const m = /^([一二三四五六七八]|話題|话题|自己)[｜|、.]?\s*[|｜]\s*(.+)$/.exec(line);
     if (!m) continue;
-    const chapter = m[1];
-    if (!CARD_CHAPTERS.has(chapter)) continue;
     const body = oneLine(m[2], 300);
-    if (body) out.push({ chapter, text: body });
+    if (!body) continue;
+    if (m[1] === '話題' || m[1] === '话题') {
+      if (loops.length < 2) loops.push(body);
+      continue;
+    }
+    if (m[1] === '自己') {
+      self = body;
+      continue;
+    }
+    if (!CARD_CHAPTERS.has(m[1])) continue;
+    entries.push({ chapter: m[1], text: body });
   }
-  return out;
+  return { entries, loops, self };
+}
+
+/** 只看记忆卡条目（老接口，保持兼容）。 */
+export function parseConsolidate(text) {
+  return parseConsolidateExtra(text).entries;
 }
 
 function chapterHeading(line) {
@@ -121,13 +143,42 @@ function chapterHeading(line) {
   return num;
 }
 
+/** 比「是不是说过同一件事」用的：去掉标点空白、压小写。 */
+function normalizeForCompare(text) {
+  return String(text ?? '')
+    .replace(/^[-*\s]+/, '')
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .toLowerCase();
+}
+
+/** 一章里最多留几条；超了就从最旧的开始丢，免得整章越滚越长。 */
+const MAX_BULLETS_PER_CHAPTER = 12;
+
+function splitChapters(lines) {
+  const out = new Map();
+  let cur = '';
+  for (let i = 0; i < lines.length; i += 1) {
+    const num = chapterHeading(lines[i]);
+    if (num) {
+      cur = num;
+      if (!out.has(cur)) out.set(cur, []);
+      continue;
+    }
+    if (!cur) continue;
+    if (/^\s*-\s+/.test(lines[i])) out.get(cur).push(i);
+  }
+  return out;
+}
+
 /**
  * 把条目追加到记忆卡对应章的末尾（下一章标题之前）。
- * 写之前先备份一份 `記憶卡.md.bak-<时间戳>`；返回 {file, backup, added}。
+ * 写之前先备份一份 `記憶卡.md.bak-<时间戳>`；返回 {file, backup, added, skipped, trimmed}。
+ * - 同一章里已经说过的话不重复写（只差标点的也算同一条）。
+ * - 每章超过 MAX_BULLETS_PER_CHAPTER 条就从最旧的删。
  */
 export function appendCardEntries(cardFile, entries, at = new Date()) {
   const list = Array.isArray(entries) ? entries.filter((e) => e && CARD_CHAPTERS.has(e.chapter) && String(e.text ?? '').trim()) : [];
-  if (!list.length) return { file: cardFile, backup: '', added: 0 };
+  if (!list.length) return { file: cardFile, backup: '', added: 0, skipped: 0, trimmed: 0 };
   const original = fs.readFileSync(cardFile, 'utf8');
   const stamp = `${dayStamp(at).replace(/-/g, '')}-${clockStamp(at).replace(':', '')}-${String(at.getSeconds()).padStart(2, '0')}`;
   const backup = `${cardFile}.bak-${stamp}`;
@@ -135,9 +186,20 @@ export function appendCardEntries(cardFile, entries, at = new Date()) {
 
   const lines = original.split(/\r?\n/);
   let added = 0;
+  let skipped = 0;
   for (const entry of list) {
     const text = oneLine(entry.text, 300);
     if (!text) continue;
+    const norm = normalizeForCompare(text);
+    const chapterLines = splitChapters(lines).get(entry.chapter) ?? [];
+    const seen = chapterLines.some((i) => {
+      const other = normalizeForCompare(lines[i]);
+      return other === norm || (norm.length > 8 && (other.includes(norm) || norm.includes(other)));
+    });
+    if (seen) {
+      skipped += 1;
+      continue;
+    }
     // 从后往前找这一章，插到下一章标题前；找不到就追加到文件末尾。
     let start = -1;
     for (let i = lines.length - 1; i >= 0; i -= 1) {
@@ -165,9 +227,22 @@ export function appendCardEntries(cardFile, entries, at = new Date()) {
     lines.splice(insertAt, 0, bullet);
     added += 1;
   }
-  if (!added) return { file: cardFile, backup: '', added: 0 };
+
+  // 收尾：每章太长就从最旧的删（只删这一章开头的条目）。
+  let trimmed = 0;
+  for (const [, idxs] of splitChapters(lines)) {
+    const over = idxs.length - MAX_BULLETS_PER_CHAPTER;
+    if (over <= 0) continue;
+    const drop = idxs.slice(0, over);
+    for (const i of drop.sort((a, b) => b - a)) {
+      lines.splice(i, 1);
+      trimmed += 1;
+    }
+  }
+  if (!added && !trimmed) return { file: cardFile, backup: '', added: 0, skipped, trimmed: 0 };
+  if (!added && trimmed) fs.writeFileSync(backup, original, 'utf8');
   fs.writeFileSync(cardFile, lines.join('\n').replace(/\n{3,}/g, '\n\n'), 'utf8');
-  return { file: cardFile, backup, added };
+  return { file: cardFile, backup, added, skipped, trimmed };
 }
 
 function entryCount(list) {

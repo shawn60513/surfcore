@@ -115,7 +115,7 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(brief.includes("晚安"), true);
   assert.equal(brief.includes("一起去过海边"), true, "第六章（共同经历）要进来");
   assert.equal(brief.includes("不该出现"), false, "第四章不该混进来");
-  assert.equal(brief.includes("我叫爱弥丝"), false, "第一章不该混进来");
+  assert.equal(brief.includes("我叫爱弥丝"), true, "第一章（身份锚点）要进来");
   assert.equal(brief.includes("这条也不该出现"), false, "第七章不该混进来");
   assert.equal(readMemoryBrief(path.join(dir, "没有这个文件.md")), "");
   assert.equal(readMemoryBrief(""), "");

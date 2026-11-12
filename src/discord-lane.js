@@ -13,7 +13,7 @@
 // 限制：只走 REST（沒有 gateway），所以是輪詢（預設 60s），不是即時推送。
 import fs from 'node:fs';
 import path from 'node:path';
-import { appendCardEntries, appendDiary, buildConsolidatePrompt, dayStamp, memoryLayout, parseConsolidate, pinFishMemoryOff, pruneForeignBindings, readDiary, shouldConsolidate } from './lane-memory.js';
+import { appendCardEntries, appendDiary, buildConsolidatePrompt, dayStamp, memoryLayout, parseConsolidateExtra, pinFishMemoryOff, pruneForeignBindings, readDiary, shouldConsolidate } from './lane-memory.js';
 import { pathToFileURL } from 'node:url';
 const FISH_MEMORY_CONFIG = () => path.join(process.env.USERPROFILE || process.env.HOME || '', '.dsh', 'fish-memory-config.json');
 
@@ -382,9 +382,9 @@ function syncWorkspaceInstructions(root) {
   return file;
 }
 
-const MEMORY_BRIEF_LIMIT = 500;
+const MEMORY_BRIEF_LIMIT = 900;
 // 「六｜難忘的時刻」也要進來：她記得共同經歷，才不會只記得「你是誰」。
-const MEMORY_BRIEF_CHAPTERS = new Set(['三', '五', '六']);
+const MEMORY_BRIEF_CHAPTERS = new Set(['一', '三', '五', '六']);
 
 /**
  * 從星汐記憶卡裡取一段「記得的事」：只要「對方是誰」「我們的約定」兩章，
@@ -413,10 +413,12 @@ export function readMemoryBrief(file, limit = MEMORY_BRIEF_LIMIT) {
     const t = stripBullet(line).replace(/[。；;]+$/u, '');
     if (t) perChapter.set(cur, [...(perChapter.get(cur) ?? []), t]);
   }
+  // 「三/五/六」取最後 3 條（卡片往後追加，越下面越新）；
+  // 「一｜我是誰」取最前面 2 條——那是身份錨點，聊久了最容易被稀釋。
   const picked = [];
-  for (const ch of ['三', '五', '六']) {
+  for (const ch of ['一', '三', '五', '六']) {
     const list = perChapter.get(ch) ?? [];
-    picked.push(...list.slice(-3));
+    picked.push(...(ch === '一' ? list.slice(0, 2) : list.slice(-3)));
   }
   // 超長就從最舊的開始丟，保住最新的那幾條。
   while (picked.length > 1 && picked.join('；').length > limit) picked.shift();
@@ -455,6 +457,8 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
   const proactiveEnabled = laneCfg.proactive !== false;
   const memoryCard = String(laneCfg.memoryCard ?? '').trim();
   const memory = memoryLayout(memoryCard);
+  // 「還沒聊完的事」+「她最近在忙什麼」：夜间整理时一并抽出来，主动开口时拿来接话。
+  const loopsFile = path.join(root, 'state', 'lane-loops.json');
   const consolidateHour = Number(laneCfg.consolidateHour ?? 23);
 
   const state = {
@@ -842,11 +846,28 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       .join('\n');
   }
 
+  function readLoops() {
+    const doc = readJson(loopsFile, {});
+    const loops = Array.isArray(doc?.loops) ? doc.loops.filter((x) => typeof x === 'string' && x.trim()) : [];
+    const self = typeof doc?.self === 'string' ? doc.self.trim() : '';
+    return { loops, self, at: Number(doc?.at ?? 0) };
+  }
+
+  function saveLoops(next) {
+    try {
+      fs.writeFileSync(loopsFile, JSON.stringify({ ...next, at: Date.now() }, null, 2), 'utf8');
+    } catch (error) {
+      log(`Discord lane：記不住「還沒聊完的事」：${error?.message ?? error}`);
+    }
+  }
+
   function proactivePrompt() {
     const last = history().slice(-6)
       .map((m) => `${m.role === 'user' ? '對方' : '你'}：${m.content}`)
       .join('\n');
     const remember = readMemoryBrief(memoryCard);
+    const loops = readLoops();
+    const loopsHint = loops.loops.length ? loops.loops.join('；') : '';
     return [
       '（Discord 私訊）你剛好在想對方，想主動私訊找他講一句話。',
       tasteHint('推薦'),
@@ -855,6 +876,8 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       '如果現在完全不適合開口（他在忙、時候不對、你沒話說），就只回一個字：跳過。',
       '',
       `（${timeLine(new Date(), Number(history().at(-1)?.at ?? 0))}）`,
+      loopsHint ? `（話還沒說完的事：${loopsHint}——可以順口問一句，別像在催報告。）` : '',
+      loops.self ? `（你最近在忙：${loops.self}）` : '',
       '',
       remember ? `（你記得的事：${remember}）` : '',
       '',
@@ -895,13 +918,24 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     save();
     try {
       const answer = await runTurn(buildConsolidatePrompt(diary));
-      const entries = answer.trim() === "沒有" ? [] : parseConsolidate(answer);
+      if (answer.trim() === '沒有') {
+        log('Discord lane：記憶整理完成（今天沒有新東西）');
+        return;
+      }
+      const { entries, loops, self } = parseConsolidateExtra(answer);
+      if (loops.length || self) {
+        const prev = readLoops();
+        saveLoops({ loops: loops.length ? loops : prev.loops, self: self || prev.self });
+        log(`Discord lane：記下了 ${loops.length} 件還沒聊完的事${self ? '，還有她最近在忙什麼' : ''}`);
+      }
       if (!entries.length) {
-        log("Discord lane：記憶整理完成（今天沒有新東西）");
+        log('Discord lane：記憶整理完成（今天沒有新東西）');
         return;
       }
       const res = appendCardEntries(memory.cardFile, entries, now);
-      log(`Discord lane：記憶整理完成（${res.added} 條，已備份 ${path.basename(res.backup)}）`);
+      const extra = res.skipped ? `，重複略過 ${res.skipped} 條` : '';
+      const trimmed = res.trimmed ? `，舊的擠掉 ${res.trimmed} 條` : '';
+      log(`Discord lane：記憶整理完成（${res.added} 條${extra}${trimmed}，已備份 ${path.basename(res.backup)}）`);
     } catch (error) {
       state.lastConsolidated = "";
       save();

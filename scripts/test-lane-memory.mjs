@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { appendCardEntries, appendDiary, buildConsolidatePrompt, clockStamp, dayStamp, foreignBindings, memoryLayout, parseConsolidate, pruneForeignBindings, readDiary, shouldConsolidate, pinFishMemoryOff } from '../src/lane-memory.js';
+import { appendCardEntries, appendDiary, buildConsolidatePrompt, clockStamp, dayStamp, foreignBindings, memoryLayout, parseConsolidate, parseConsolidateExtra, pruneForeignBindings, readDiary, shouldConsolidate, pinFishMemoryOff } from '../src/lane-memory.js';
 
 const nl = String.fromCharCode(10);
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lane-memory-'));
@@ -61,7 +61,7 @@ assert.equal(prompt.includes('只回一個字：沒有'), true);
 const parsed = parseConsolidate([
   '三|他养了六只猫',
   '五｜周末去看猫展',
-  '- 六|第一次说早安',
+  '六|第一次一起看电影',
   '七|不该收的章',
   '随便说两句',
   '',
@@ -69,7 +69,7 @@ const parsed = parseConsolidate([
 assert.deepEqual(parsed, [
   { chapter: '三', text: '他养了六只猫' },
   { chapter: '五', text: '周末去看猫展' },
-  { chapter: '六', text: '第一次说早安' },
+  { chapter: '六', text: '第一次一起看电影' },
 ]);
 
 // 5) 写入记忆卡：插在对应章末尾（下一章标题之前），并留备份
@@ -166,5 +166,32 @@ assert.equal(fishCfg.switchMigrated, true, '别的顶层键要留着');
 assert.equal(pinFishMemoryOff(fishFile, 'session-new-lane').changed, false, '已经是关的就不重复写');
 assert.equal(pinFishMemoryOff(path.join(dir, 'nope.json'), 'x').changed, false, '文件不存在就安静跳过');
 
+// 12) 一次整理还能带出「还没聊完的事」和「她最近在忙什么」；重复条目不再写第二遍
+const extra = parseConsolidateExtra([
+  '三|他养了六只猫',
+  '話題|他明天去验车，说回来讲结果',
+  '自己|在练《紙飛機》最后一句',
+].join(nl));
+assert.deepEqual(extra.entries, [{ chapter: '三', text: '他养了六只猫' }]);
+assert.deepEqual(extra.loops, ['他明天去验车，说回来讲结果']);
+assert.equal(extra.self, '在练《紙飛機》最后一句');
+
+const dupFile = path.join(dir, 'dup.md');
+fs.writeFileSync(dupFile, ['## 三｜对方是谁', '- 他养了六只猫。', ''].join(nl), 'utf8');
+const dup = appendCardEntries(dupFile, [{ chapter: '三', text: '他养了六只猫' }], at);
+assert.equal(dup.added, 0, '只差标点也算同一条，不重复写');
+assert.equal(dup.skipped, 1);
+
+// 13) 一章太长就从最旧的丢
+const longFile = path.join(dir, 'long.md');
+const many = Array.from({ length: 14 }, (_, i) => '- 第 ' + (i + 1) + ' 件事').join(nl);
+fs.writeFileSync(longFile, ['## 六｜难忘的时刻', many, ''].join(nl), 'utf8');
+const capped = appendCardEntries(longFile, [{ chapter: '六', text: '最新的一件' }], at);
+assert.equal(capped.added, 1);
+assert.equal(capped.trimmed, 3, '14 + 1 = 15 条，砍到 12 条');
+const cappedText = fs.readFileSync(longFile, 'utf8');
+assert.equal(cappedText.includes('最新的一件'), true);
+assert.equal(cappedText.includes('- 第 1 件事'), false, '最旧的那几条被挤掉');
+
 fs.rmSync(dir, { recursive: true, force: true });
-console.log('test-lane-memory: 11 组断言通过');
+console.log('test-lane-memory: 13 组断言通过');
