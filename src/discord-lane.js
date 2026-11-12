@@ -29,6 +29,7 @@ import {
 } from './discord-core.js';
 import { readPersonaLayerText } from './character-persona.js';
 import { pickSpeakLine, shouldSpeak, synthesizeWav } from './tts.js';
+import { createRvcVoice } from './rvc-voice.js';
 import { buildDayPlan, currentActivity, formatSelfLine } from './lane-day.js';
 import { discoverDshBaseUrl, isLoopbackBaseUrl, probeDshBaseUrl } from './dsh-port.js';
 
@@ -643,6 +644,33 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     return { sent, failed };
   }
 
+  // RVC 換聲（可選）：把 SAPI 唸出來的東西換成她的音色。第一次用到才起工人。
+  let rvcVoiceInstance = null;
+  function rvcVoice() {
+    const voiceCfg = laneCfg.voice ?? {};
+    const rvcCfg = voiceCfg.rvc ?? {};
+    if (rvcCfg.enabled !== true) return null;
+    if (rvcVoiceInstance) return rvcVoiceInstance;
+    const resolvePath = (value, fallback) => {
+      const raw = String(value ?? fallback ?? "");
+      if (!raw) return "";
+      return path.isAbsolute(raw) ? raw : path.join(root, raw);
+    };
+    try {
+      rvcVoiceInstance = createRvcVoice({
+        pythonPath: resolvePath(rvcCfg.python, "state/voice-venv/Scripts/python.exe"),
+        workerPath: resolvePath(rvcCfg.worker, "scripts/rvc/worker.py"),
+        modelDir: resolvePath(rvcCfg.modelDir, "state/voice-model"),
+        timeoutMs: Number(rvcCfg.timeoutMs ?? 120000),
+        logger: (message) => log(message),
+      });
+    } catch (error) {
+      log(`Discord lane：換聲工人起不來（${error && error.message ? error.message : error}）`);
+      return null;
+    }
+    return rvcVoiceInstance;
+  }
+
   /**
    * 偶爾配一條語音：把最後一句唸出來丟過去。
    * 語音壞了不影響文字（文字早就送出去了），只記一條 log。
@@ -658,7 +686,23 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     let file = '';
     try {
       file = await synthesizeWav(line, { rate: Number(voiceCfg.rate ?? 2) });
-      const data = fs.readFileSync(file);
+      let voiced = file;
+      const rvc = rvcVoice();
+      if (rvc) {
+        const converted = file.replace(/\.wav$/i, '.rvc.wav');
+        const result = await rvc.convert({
+          input: file,
+          output: converted,
+          f0up: Number(voiceCfg.rvc?.f0up ?? 0),
+          indexRate: Number(voiceCfg.rvc?.indexRate ?? 0.75),
+        });
+        if (result.ok) {
+          voiced = converted;
+        } else {
+          log(`Discord lane：換聲沒成功（${result.error}），這句用原聲`);
+        }
+      }
+      const data = fs.readFileSync(voiced);
       const channelId = await ensureDm();
       await discordSendMessage(channelId, {
         content: '',
@@ -669,6 +713,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
       log(`Discord lane：語音沒送出去（${error?.code ?? error?.message ?? error}）`);
     } finally {
       if (file) { try { fs.unlinkSync(file); } catch {} }
+      if (file) { try { fs.unlinkSync(file.replace(/\.wav$/i, '.rvc.wav')); } catch {} }
     }
   }
 

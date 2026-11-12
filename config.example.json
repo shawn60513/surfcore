@@ -430,7 +430,16 @@
         "enabled": false,
         "chance": 0.35,
         "maxChars": 60,
-        "rate": 2
+        "rate": 2,
+        "rvc": {
+          "enabled": false,
+          "python": "state/voice-venv/Scripts/python.exe",
+          "worker": "scripts/rvc/worker.py",
+          "modelDir": "state/voice-model",
+          "indexRate": 0.75,
+          "f0up": 0,
+          "timeoutMs": 120000
+        }
       }
     },
     "mentionUsers": [],

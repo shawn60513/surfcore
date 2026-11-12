@@ -12,6 +12,24 @@
 
 ---
 
+## 待发布 · 2026-11-13 05:05 · 換聲（RVC v2 語音包接進 lane）
+
+- **覆盖提交**：本批次（feat: 她自己的聲音）
+- **功能**：Discord 語音仍是 SAPI 先唸，可選再過一層 RVC v2 換成愛彌斯音色；預設關閉，等音色驗收。
+- **檔案**：`src/rvc-voice.js`（新）、`scripts/rvc/worker.py`（新）、`scripts/rvc/infer_aimisi.py`（新）、`src/discord-lane.js`、`scripts/test-rvc-voice.mjs`（新）、`config.json`、`config.example.json`、`docs/cases/2026-11-13-lane-rvc-voice.md`。
+- **case**：`docs/cases/2026-11-13-lane-rvc-voice.md`
+- **建議版本**：0.9.1 patch（新功能但預設關閉）
+- **回滾**：把 `discord.lane.voice.rvc.enabled` 設回 `false` 即可（文字與 SAPI 語音不受影響）。
+
+```text
+feat(discord): 她自己的聲音——RVC v2 語音包接進語音回覆
+
+- 語音仍是 SAPI 先唸（離線、無 key），可選再過 RVC 換成愛彌斯音色
+- rvc-voice.js 包常駐工人：模型只載一次、請求排隊、超時/崩潰都不影響已送出文字
+- fairseq 0.12.2 沒有 Python 3.12 輪子，改以 HF content-vec-best 特徵替代
+- 預設關閉：音色像不像要人耳判定，先用「（換聲測試）」樣本驗收
+```
+
 ## 待发布
 
 ## 2026-11-13 04:58 — 長訊息自動拆條 + 主動開口不重複

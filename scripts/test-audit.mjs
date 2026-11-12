@@ -288,6 +288,7 @@ const tests = [
   // Discord MCP：白名单 fail-closed、发送压制 @everyone、429 重试、stdio 六工具接入。
   'test-mcp-discord.mjs',
   'test-tts.mjs',
+  'test-rvc-voice.mjs',
   'test-discord-split.mjs',
   'test-discord-lane.mjs',
   'test-lane-day.mjs',
