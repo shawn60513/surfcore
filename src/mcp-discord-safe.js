@@ -9,12 +9,14 @@
 // - 服务器/频道白名单在 discord-core.js 里强制，白名单外一律拒绝；
 // - 发送一律压制 @everyone/@role/@user 的 ping；
 // - 每个失败都回 `{ ok:false, code, error, hint }`，让模型知道下一步怎么做。
+import os from 'node:os';
 import path from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import {
   createDiscordClient,
+  loadAttachment,
   loadDiscordConfig,
   resolveDiscordToken,
   toErrorPayload,
@@ -47,6 +49,20 @@ function current() {
 }
 
 const server = new McpServer({ name: 'discord', version: '0.1.0' });
+
+/**
+ * 允许发出去的目录：表情包库、DSH profile 里插件的图库、本项目的 state/、assets/。
+ * 故意不放开整个磁盘——否则一句「把 C:\\…\\xxx.png 发出去」就能把任意本机图片外传。
+ */
+function attachmentRoots() {
+  const home = process.env.USERPROFILE || os.homedir();
+  return [
+    path.join(home, '.dsh', 'meme-packs'),
+    path.join(home, '.dsh', 'profiles'),
+    path.join(root, 'state'),
+    path.join(root, 'assets'),
+  ];
+}
 
 function text(payload) {
   return { content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }] };
@@ -143,15 +159,27 @@ server.tool(
 
 server.tool(
   'discord_send_message',
-  '在 Discord 文本频道发一条消息（可指定 replyTo 引用某条消息）。@everyone/@role 永远压制；要 @ 具体某个人，正文写 <@用户ID> 并把 ID 放进 mentions（只有 discord.mentionUsers 白名单里的 ID 会真的 ping）。这是对外发送操作。',
+  '在 Discord 文本频道发一条消息（可指定 replyTo 引用某条消息，也可附一张本地图片）。@everyone/@role 永远压制；要 @ 具体某个人，正文写 <@用户ID> 并把 ID 放进 mentions（只有 discord.mentionUsers 白名单里的 ID 会真的 ping）。这是对外发送操作。',
   {
     channel: z.string().describe('频道 ID（数字），必须在白名单服务器里'),
-    content: z.string().describe('消息正文，最多 2000 字符，纯文本（Discord markdown 可用）'),
+    content: z.string().describe('消息正文，最多 2000 字符，纯文本（Discord markdown 可用）；带 file 时可以为空'),
+    file: z
+      .string()
+      .optional()
+      .describe('要附上的本地图片绝对路径（png/jpg/gif/webp，≤8MB），例如 meme_list 返回的 path；带图时 content 可以留空'),
     replyTo: z.string().optional().describe('要引用/回复的消息 ID（来自 discord_read_messages）；回复会 ping 被回复的人'),
     mentions: z.array(z.string()).optional().describe('要 @ 的用户 ID 列表；只有 config.json 的 discord.mentionUsers 里的 ID 才会真的 ping 到人'),
   },
-  async ({ channel, content, replyTo, mentions }) =>
-    run(async ({ client }) => client.sendMessage(channel, { content, replyTo, mentions }))
+  async ({ channel, content, file, replyTo, mentions }) =>
+    run(async ({ client }) => {
+      const attachment = file ? loadAttachment(file, { allowedRoots: attachmentRoots() }) : null;
+      return client.sendMessage(channel, {
+        content,
+        replyTo,
+        mentions,
+        ...(attachment ? { file: attachment } : {}),
+      });
+    })
 );
 
 server.tool(

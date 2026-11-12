@@ -12,6 +12,21 @@
 
 ---
 
+## 待發布 · 2026-11-13 07:25 · 她會發表情包了（Discord 附件通道）
+
+- **覆蓋提交**：本批次
+- **功能**：`src/discord-core.js` 新增 `loadAttachment(file, { allowedRoots })`（絕對路徑＋目錄白名單＋≤8MB＋只收 png/jpg/gif/webp）；`src/mcp-discord-safe.js` 的 `discord_send_message` 加 `file` 參數；`src/discord-lane.js` 的工作區規則加「想發表情包 → `meme_list` 挑一張 → `discord_send_message(file=path)`」。
+- **裝了什麼**：`dsh-meme@0.1.80`（desktop profile，寫進 `dsh.profile.bundles`）——內建「大肥魚」圖庫 24 張，工具 `meme_list` / `meme_update` / `send_meme`。
+- **為什麼不能用現成的**：`dsh-meme` 的原生 IM 直發只接 `dsh-im`（QQ／微信／飛書），Discord 不在支援清單；bot 又缺 `MANAGE_EMOJIS_AND_STICKERS`（用户說表情包做成自訂表情先不做），所以改走附件上傳（bot 有 `ATTACH_FILES`）。
+- **驗證**：`test-mcp-discord.mjs` 新增 5f／5g → 全過；真機把 `deyi.jpg`（37,750 bytes）發到 DM `1567777542910386347`，`sent true 1570579900811837502`。
+- **注意**：MCP server 是 DSH 啟動時 spawn 的，`file` 參數要**重啟 DSH** 才會出現在她的工具表。
+- **檔案**：`src/discord-core.js`、`src/mcp-discord-safe.js`、`src/discord-lane.js`、`scripts/test-mcp-discord.mjs`、`docs/cases/2026-11-13-lane-meme-upload.md`
+- **case**：`docs/cases/2026-11-13-lane-meme-upload.md`
+- **建議版本**：0.9.1 patch
+- **回滾**：不影響既有行為（`file` 是可選參數）；要停用表情包，把 `dsh-meme` 從 `dsh.profile.bundles` 移除即可。
+
+---
+
 ## 待發布 · 2026-11-13 06:50 · 她的聲音改成 GPT-SoVITS v4（GPU）
 
 - **覆蓋提交**：本批次

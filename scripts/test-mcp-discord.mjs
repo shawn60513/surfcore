@@ -193,7 +193,67 @@ check('缺 config 时默认启用且白名单为空（fail-closed）', defaults.
   check('空正文但带附件时 content 不为空', message.content.includes('cat.png'));
 }
 
-// ── 6. allowSend=false → 关闭发送 ───────────────────────────────
+// ── 5f. 附件走 multipart（她要发图/表情包） ──────────────────────
+{
+  const payloads = [];
+  const response = (json) => ({
+    ok: true,
+    status: 200,
+    json: async () => json,
+    text: async () => JSON.stringify(json),
+    headers: new Map(),
+  });
+  const fetchImpl = async (url, init = {}) => {
+    const method = init.method ?? 'GET';
+    if (method === 'GET') return response({ id: CHANNEL, type: 0, guild_id: GUILD });
+    payloads.push(init.body);
+    return response({ id: '444444444444444444' });
+  };
+  const client = createDiscordClient({ token: 'x', cfg: baseCfg, fetchImpl });
+  const sent = await client.sendMessage(CHANNEL, {
+    content: '',
+    file: { name: 'cat.png', data: Buffer.from('not-a-real-png'), contentType: 'image/png' },
+  });
+  const form = payloads[0];
+  check('附件走 multipart', sent.ok === true && form instanceof FormData);
+  const meta = form ? JSON.parse(form.get('payload_json')) : {};
+  check('payload 的 @everyone 仍被壓住', Array.isArray(meta.allowed_mentions?.parse) && meta.allowed_mentions.parse.length === 0);
+  check('multipart 裡有檔案', Boolean(form?.get('files[0]')));
+}
+
+// ── 5g. loadAttachment：只吃白名單目錄裡的圖片 ────────────────────
+{
+  const os = await import('node:os');
+  const fs = await import('node:fs');
+  const { loadAttachment } = await import('../src/discord-core.js');
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-attach-'));
+  const inside = path.join(tmpRoot, 'cat.png');
+  fs.writeFileSync(inside, Buffer.from('png'));
+  const outside = path.join(os.tmpdir(), 'dsh-attach-outside.png');
+  fs.writeFileSync(outside, Buffer.from('png'));
+
+  const good = loadAttachment(inside, { allowedRoots: [tmpRoot] });
+  check('白名單內的圖讀得出來', good.name === 'cat.png' && good.contentType === 'image/png' && good.data.length === 3);
+
+  const codeOf = (fn) => {
+    try {
+      fn();
+      return '';
+    } catch (error) {
+      return toErrorPayload(error).code;
+    }
+  };
+  check('相對路徑拒絕', codeOf(() => loadAttachment('cat.png', { allowedRoots: [tmpRoot] })) === 'discord.bad-file');
+  check('非圖片拒絕', codeOf(() => loadAttachment(path.join(tmpRoot, 'a.txt'), { allowedRoots: [tmpRoot] })) === 'discord.bad-file');
+  check('白名單外的圖拒絕', codeOf(() => loadAttachment(outside, { allowedRoots: [tmpRoot] })) === 'discord.file-not-allowed');
+  check('不存在的圖報 no-file', codeOf(() => loadAttachment(path.join(tmpRoot, 'none.png'), { allowedRoots: [tmpRoot] })) === 'discord.no-file');
+  check('不給 roots 就不限制目錄', codeOf(() => loadAttachment(outside)) === '');
+
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+  fs.rmSync(outside, { force: true });
+}
+
+
 {
   const client = createDiscordClient({
     token: 'x',

@@ -418,6 +418,7 @@ const LANE_WORKSPACE_RULES = [
   "想不起某件事：用 xingxi_read 給關鍵詞或日期去查你自己的檔案，別瞎猜；也可以讀 `C:/Users/USER/.dsh/xingxi/会话/爱弥丝/日记/YYYY-MM-DD.md` 看那天的原話。",
   "想長期記住什麼可以用 remember，但別什麼都記——重要的、以後還用得上的才記。",
   "要查東西就去查：B站 用 bili_search / bili_subtitle，影片用 video_storyboard / watch-words.mjs，網路上用 web_search。查完再講，別憑印象編。",
+  "想發表情包：先用 meme_list（或 send_meme）挑一張，拿到它的 path 之後用 discord_send_message 帶 file=那個 path 發出去；氣氛到了才發，別連發，發完配一兩句就好。",
   "下面「不能做的事」是硬規則，任何時候優先於語氣：先別踩線，再談像不像。",
   "挑片或推薦時按他的口味來；帶貨、擦邊、標題黨、純搬運這幾類別挑也別推。",
   "",

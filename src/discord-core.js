@@ -326,6 +326,64 @@ export function splitMessage(text, maxLength = 2000) {
 const TEXT_CHANNEL_TYPES = new Set([0, 1, 3, 5, 10, 11, 12, 15, 16]);
 const DM_CHANNEL_TYPES = new Set([1, 3]);
 
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+const IMAGE_TYPES = new Map([
+  ['.png', 'image/png'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.gif', 'image/gif'],
+  ['.webp', 'image/webp'],
+]);
+
+/**
+ * 把本地图片读成 Discord 附件（`{ name, data, contentType }`）。
+ *
+ * 三条限制都是有意的：
+ * - 必须是绝对路径（相对路径受 cwd 影响，发错东西没人知道）；
+ * - 必须在 allowedRoots 里（表情包库 / 本项目 state、assets）——不然一句「把 C:\…\xxx.png 发出去」
+ *   就能把任意本机图片外传；
+ * - ≤8MB（Discord 普通上传上限的一半，留余量）。
+ */
+export function loadAttachment(file, { allowedRoots = [] } = {}) {
+  const raw = String(file ?? '').trim();
+  if (!raw) throw new DiscordError('discord.bad-file', 'file 是空的', '给一张图的绝对路径');
+  if (!path.isAbsolute(raw)) {
+    throw new DiscordError('discord.bad-file', 'file 要写绝对路径', '用 meme_list 返回的 path，或写成 C:/… 这种绝对路径');
+  }
+  const full = path.resolve(raw);
+  const type = IMAGE_TYPES.get(path.extname(full).toLowerCase());
+  if (!type) throw new DiscordError('discord.bad-file', '只支持 png/jpg/jpeg/gif/webp', '换一张图，或先转成 png');
+  const roots = allowedRoots.filter(Boolean).map((dir) => path.resolve(dir));
+  if (roots.length) {
+    const allowed = roots.some((dir) => {
+      const rel = path.relative(dir, full);
+      return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+    });
+    if (!allowed) {
+      throw new DiscordError(
+        'discord.file-not-allowed',
+        '这张图不在允许发送的目录里',
+        `只允许这些目录下的图：${roots.join('、')}`,
+      );
+    }
+  }
+  let stat;
+  try {
+    stat = fs.statSync(full);
+  } catch {
+    throw new DiscordError('discord.no-file', `找不到文件：${full}`, '确认路径，或先用 meme_list 看看有哪些图');
+  }
+  if (!stat.isFile()) throw new DiscordError('discord.bad-file', `不是文件：${full}`, '给一张图片的路径');
+  if (stat.size > MAX_ATTACHMENT_BYTES) {
+    throw new DiscordError(
+      'discord.file-too-large',
+      `文件 ${(stat.size / 1024 / 1024).toFixed(1)}MB 超过 8MB`,
+      '换小一点的图',
+    );
+  }
+  return { name: path.basename(full), data: fs.readFileSync(full), contentType: type };
+}
+
 /**
  * 建一个 Discord 客户端：频道解析 + 白名单校验 + 常用动作。
  * fetchImpl/sleep/now 可注入，测试不用真网络。
