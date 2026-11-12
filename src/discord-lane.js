@@ -33,7 +33,7 @@ import { discoverDshBaseUrl, isLoopbackBaseUrl, probeDshBaseUrl } from './dsh-po
 const LANE_VERSION = 1;
 const DEFAULT_POLL_MS = 60_000;
 const DEFAULT_IDLE_MINUTES = 120;
-const TURN_TIMEOUT_MS = 180_000;
+const TURN_TIMEOUT_MS = 240_000;
 const HISTORY_LIMIT = 24;
 // 兜底語氣卡：AGENTS.md 只在會話開頭注入，DSH 壓縮之後不保證會再注入。
 // 每輪帶一句（約 25 token）比「她慢慢退回客服腔」便宜得多。
@@ -223,6 +223,19 @@ function splitContent(text, max = 1900) {
   return out.filter(Boolean);
 }
 
+/** Discord 的 snowflake id 是 19 位，超過 Number 的安全整數；只比大小可以用 BigInt。 */
+export function compareIds(a, b) {
+  const left = String(a?.id ?? '');
+  const right = String(b?.id ?? '');
+  try {
+    const l = BigInt(left);
+    const r = BigInt(right);
+    return l < r ? -1 : l > r ? 1 : 0;
+  } catch {
+    return left < right ? -1 : left > right ? 1 : 0;
+  }
+}
+
 function hourInQuiet(now, quiet) {
   const start = Number(quiet?.start ?? 23);
   const end = Number(quiet?.end ?? 8);
@@ -350,7 +363,10 @@ const LANE_WORKSPACE_RULES = [
   "附和要短：「嗯」「哦哦」「真的假的」「笑死」這種，別展開。",
   "每輪最多問一個問題，問完別自己搶著答。",
   "小事可以說成拯救世界，大事反而輕飄飄一句帶過；難過的事先用玩笑包一層，笑完才說一點真的。",
-  "下面「他爱看什么」「你绝对不能做的事」两节是硬规则，任何时候优先于语气：先别踩线，再谈像不像。",
+  "想不起某件事：用 xingxi_read 給關鍵詞或日期去查你自己的檔案，別瞎猜；也可以讀 `C:/Users/USER/.dsh/xingxi/会话/爱弥丝/日记/YYYY-MM-DD.md` 看那天的原話。",
+  "想長期記住什麼可以用 remember，但別什麼都記——重要的、以後還用得上的才記。",
+  "要查東西就去查：B站 用 bili_search / bili_subtitle，影片用 video_storyboard / watch-words.mjs，網路上用 web_search。查完再講，別憑印象編。",
+  "下面「不能做的事」是硬規則，任何時候優先於語氣：先別踩線，再談像不像。",
   "挑片或推薦時按他的口味來；帶貨、擦邊、標題黨、純搬運這幾類別挑也別推。",
   "",
   "你絕對不能做的事：",
@@ -520,15 +536,12 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     if (state.lastMessageId) query.set('after', state.lastMessageId);
     const raw = await discordRequest({ token, route: `/channels/${channelId}/messages?${query}` });
     const list = Array.isArray(raw) ? raw : [];
-    const mine = new Set();
     const messages = list
       .map((m) => normalizeMessage(m))
       .filter((m) => m && m.authorId)
-      .filter((m) => {
-        if (m.authorId === mine) return false;
-        return true;
-      })
-      .sort((a, b) => Number(a.id) - Number(b.id));
+      // 自己的訊息不能當成他說的：以前這裡只有一個空 Set，靠後面再擋一次。
+      .filter((m) => !state.botId || m.authorId !== state.botId)
+      .sort(compareIds);
     return { channelId, messages };
   }
 
@@ -563,7 +576,9 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     await maybeDawdle();
     const channelId = await ensureDm();
     const bubbles = splitBubbles(stripChatPeriods(text));
-    if (!bubbles.length) return;
+    if (!bubbles.length) return { sent: 0, failed: 0 };
+    let sent = 0;
+    let failed = 0;
     for (let i = 0; i < bubbles.length; i += 1) {
       // 分條發：中間停一下再補下一句，比一整段更像人在打字。
       if (i > 0) await pause(900 + Math.floor(Math.random() * 1800));
@@ -571,14 +586,21 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
         // 正文里的 <@id> 只有落在 discord.mentionUsers 白名单里才会真的 ping；
         // @everyone/@role 依旧压制（parse 恒为空）。
         const mentions = [...String(part).matchAll(/<@!?(\d+)>/g)].map((m) => m[1]);
-        await discordRequest({
-          token,
-          method: 'POST',
-          route: `/channels/${channelId}/messages`,
-          body: { content: part, allowed_mentions: allowedMentionsFor(discordCfg, mentions, false) },
-        });
+        try {
+          await discordRequest({
+            token,
+            method: 'POST',
+            route: `/channels/${channelId}/messages`,
+            body: { content: part, allowed_mentions: allowedMentionsFor(discordCfg, mentions, false) },
+          });
+          sent += 1;
+        } catch (error) {
+          failed += 1;
+          log(`Discord lane：有一段沒送出去（${error?.message ?? error}）`);
+        }
       }
     }
+    return { sent, failed };
   }
 
   // ── DSH 端 ─────────────────────────────────────────────────────────────
@@ -714,6 +736,8 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
 
       if (!waiting || !waiting.turn || !collector) continue;
       if (event?.data?.turn != null && event.data.turn !== waiting.turn) continue;
+      // 這輪只要還在吐事件（工具調用、思考、串流），就把超時時間往後推。
+      waiting.touch?.();
       const ended = collector.push(event);
       if (!ended) continue;
       const pending = waiting;
@@ -758,6 +782,9 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
         notes.push(`[圖片${index + 1} 沒抓下來：${error?.message ?? error}]`);
       }
     }
+    if (list.length > MAX_IMAGE_COUNT) {
+      notes.push(`[還有 ${list.length - MAX_IMAGE_COUNT} 張圖沒送進去]`);
+    }
     return { parts, note: notes.join(String.fromCharCode(10)) };
   }
 
@@ -765,17 +792,30 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     const sessionId = await ensureSession();
     if (waiting) throw new Error('上一個回合還沒結束');
     const mine = { promptText, promptedAt: Date.now(), turn: null };
-    const promise = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+    let timer = null;
+    const armTimer = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
         if (waiting === mine) {
           waiting = null;
           collector = null;
         }
-        reject(new Error(`等待回合逾時（turn=${mine.turn ?? 'null'}）`));
+        mine.reject(new Error(`等待回合逾時（turn=${mine.turn ?? 'null'}）`));
       }, TURN_TIMEOUT_MS);
       timer.unref?.();
-      mine.resolve = (t) => { clearTimeout(timer); resolve(t); };
-      mine.reject = (e) => { clearTimeout(timer); reject(e); };
+    };
+    // 長工具鏈（看片、抽幀、下載字幕）動輒幾分鐘；只要這輪還在動，就不要判它超時。
+    mine.touch = armTimer;
+    const promise = new Promise((resolve, reject) => {
+      armTimer();
+      mine.resolve = (t) => {
+        if (timer) clearTimeout(timer);
+        resolve(t);
+      };
+      mine.reject = (e) => {
+        if (timer) clearTimeout(timer);
+        reject(e);
+      };
     });
     promise.catch(() => {});
     waiting = mine;
@@ -827,6 +867,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       .map((m) => `${m.role === 'user' ? '對方' : '你'}：${m.content}`)
       .join('\n');
     const remember = readMemoryBrief(memoryCard);
+    const selfBusy = readLoops().self;
     const lastAt = Number(history().at(-1)?.at ?? 0);
     const samples = (Array.isArray(STYLE_SAMPLES) ? STYLE_SAMPLES : [])
       .map((pair) => pair.map((line, i) => `${i === 0 ? '對方' : '你'}：${line}`).join('\n'))
@@ -836,6 +877,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
     return [
       `${timeLine(new Date(), lastAt)}（私訊）`,
       remember ? `你記得：${remember}` : '',
+      selfBusy ? `（你最近在忙：${selfBusy}）` : '',
       hasLink(text) ? LINK_HINT : '',
       tasteHint(text),
       log2 ? `（你們聊過的）\n${log2}` : '',
@@ -1029,12 +1071,14 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
           pushHistory('bot', reply);
           state.lastUserAt = Date.now();
           state.lastBotAt = Date.now();
-          await send(reply, promptText);
-          // 送出成功才推水位：模型或網路失敗時，下一輪會重試同一批，而不是讓它永久消失。
+          const delivered = await send(reply, promptText);
+          // 一條都沒送出去＝這則沒送達，保留水位等下一輪重試；送出去一部分就當送達，
+          // 否則重試時會把已經看到的那半段再發一次。
+          if (!delivered.sent) throw new Error('一條都沒送出去');
           state.lastMessageId = last.id;
           save();
           appendDiary(memory, { user: content, assistant: reply });
-          log(`Discord lane：回了 ${last.author ?? ''} 一句`);
+          log(`Discord lane：回了 ${last.author ?? ''} 一句${delivered.failed ? `（有 ${delivered.failed} 段沒送出去）` : ''}`);
         } catch (error) {
           log(`Discord lane 回覆失敗（這則保留，下一輪重試）：${error?.message ?? error}`);
         }
@@ -1066,6 +1110,38 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
       log(`Discord lane tick 失敗：${error?.message ?? error}`);
     } finally {
       working = false;
+    }
+  }
+
+  /**
+   * 事件流斷了就重連。以前這裡只跑一次 consumeEvents()，DSH 把流關掉之後
+   * 她再也收不到 turn 事件——每一輪都等滿超時，看起來就是「她忽然不理人」。
+   */
+  async function connectEvents() {
+    let backoff = 2000;
+    for (;;) {
+      try {
+        await consumeEvents();
+        log('Discord lane：事件流被關閉，稍後重連');
+      } catch (error) {
+        log(`Discord lane 事件流中斷：${error?.message ?? error}`);
+      }
+      // 斷線時把「正在等」的那一輪判死，讓它保留水位下輪重試，而不是白等到超時。
+      if (waiting) {
+        const pending = waiting;
+        waiting = null;
+        collector = null;
+        pending.reject?.(new Error('事件流斷了，這一輪稍後重試'));
+      }
+      await pause(backoff);
+      backoff = Math.min(30_000, backoff * 2);
+      try {
+        await ensureSession();
+        backoff = 2000;
+        log('Discord lane：事件流已重連');
+      } catch (error) {
+        log(`Discord lane：重連失敗（${error?.message ?? error}）`);
+      }
     }
   }
 
@@ -1129,7 +1205,7 @@ export function createDiscordLane({ root, cfg, log = console.log, once = false }
         log(`Discord lane 初始化失敗：${error?.message ?? error}`);
         return;
       }
-      consumeEvents().catch((error) => log(`Discord lane 事件流中斷：${error?.message ?? error}`));
+      connectEvents();
       await tick();
       if (once) return;
       setInterval(() => { tick(); }, pollMs);

@@ -14,6 +14,27 @@
 
 ## 待发布
 
+## 2026-11-13 04:25 — lane 全面體檢（P0 事件流不重連等 7 項）
+
+- 覆蓋提交：`（本批提交）`
+- 文件：`src/discord-lane.js`（`connectEvents()` 重連、`compareIds()`、`send()` 回 `{sent,failed}`、`TURN_TIMEOUT_MS` 240s + `touch()`、`fetchNew()` botId 過濾、多圖提示）、`src/bridge.js`（`pumpMux()` 在 `QQ_DISABLED` 時直接返回）、`scripts/test-discord-lane.mjs`（第 18 組）
+- case：[`docs/cases/2026-11-13-lane-resilience.md`](cases/2026-11-13-lane-resilience.md)
+- 建議版本：**0.9.1 patch**
+- 影響面：Discord 私訊 lane。QQ 側本來就關著；`pumpMux` 停跑後 QQ token 記賬會停，重開 QQ 要一起恢復。
+- 回滾：`git revert <本批提交>`；或臨時把 `config.json` 的 `discord.lane.enabled` 設 false。
+
+**交接塊**
+
+```
+[surfcore] lane 體檢：事件流斷線不再沉默
+- 新：connectEvents() 無限重連（2s→30s 退避），斷線時把等待中的回合判死、保留水位下輪重試
+- 修：fetchNew() 的 botId 過濾原本是死代碼（mine 是空 Set），會把自己說的話當成對方的新消息
+- 修：19 位 snowflake 用 BigInt 排序（compareIds），不再用 Number
+- 修：send() 分段落發、部分失敗不再整段重送（回 {sent, failed}）
+- 修：長工具鏈每收到事件就重新計時（240s 上限），看片/抽字幕不再被誤判超時
+- 修：QQ 關閉時 pumpMux() 不再每 30 秒重連一次 DSH 事件流
+- 測試：test-discord-lane 18 組、test-audit 149/149
+```
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 

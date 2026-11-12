@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply } from '../src/discord-lane.js';
+import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -221,4 +221,15 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   fsx.rmSync(dir, { recursive: true, force: true });
 }
 
-console.log('test-discord-lane: 17 组断言通过');
+// 18) Discord 的 id 是 19 位、超过 Number 安全整数：排序必须用 BigInt，不能 Number()
+{
+  const a = { id: '1568208156922880053' };
+  const b = { id: '1568208156922880054' };
+  const c = { id: '1568208156922880055' };
+  assert.equal(compareIds(a, b), -1);
+  assert.equal(compareIds(c, a), 1);
+  assert.equal(compareIds(b, b), 0);
+  assert.deepEqual([c, a, b].sort(compareIds).map((x) => x.id), [a.id, b.id, c.id]);
+}
+
+console.log('test-discord-lane: 18 组断言通过');

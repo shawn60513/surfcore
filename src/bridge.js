@@ -16459,6 +16459,7 @@ async function main() {
   }
 
   async function pumpMux() {
+    if (QQ_DISABLED) { log('QQ 側已關閉：不連 DSH 事件流（那是給 QQ 回覆用的）'); return; }
     // 事件流重连退避：DSH 侧流被立刻关闭时（例如版本不兼容，见 issue #34），
     // 固定 3 秒重连会以每分钟 20 行的速度刷屏，真正有用的错误反而被淹没。
     let retryMs = 3000;
