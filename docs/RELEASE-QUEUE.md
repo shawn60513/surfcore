@@ -16,7 +16,7 @@
 
 ## 2026-11-13 04:45 — 她有自己的「此刻」（日程與自我狀態注入）
 
-- 覆蓋提交：`（本批提交）`
+- 覆蓋提交：`2ecdb37`
 - 文件：`src/lane-day.js`（新）、`src/discord-lane.js`（`dayPlanFor()`/`selfLine()`，`replyPrompt()` 與 `proactivePrompt()` 各插一行）、`scripts/test-lane-day.mjs`（新）、`scripts/test-audit.mjs`
 - case：[`docs/cases/2026-11-13-lane-day.md`](cases/2026-11-13-lane-day.md)
 - 建議版本：**0.9.1 patch**
