@@ -1000,10 +1000,18 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     return formatSelfLine(activity);
   }
 
-  /** 「你們昨天聊過」：最近的日記摘錄，補記憶卡（長期結論）之外的热乎上下文。 */
+  /**
+   * 「你們昨天聊過」：最近的日記摘錄。
+   *
+   * 只取**昨天**——今天的對話已經在 history 裡了，再塞一次等於收兩份錢、
+   * 還會讓她把剛說過的話當成「以前的事」重講。只有在完全沒有歷史時才補今天的。
+   */
   function recentDiaryLine() {
-    const recent = readRecentDiary(memory, { maxChars: 240, maxLines: 3 });
-    return recent ? `（你們最近聊過：\n${recent}）` : '';
+    const yesterday = new Date(Date.now() - 86_400_000);
+    const prev = readRecentDiary(memory, { now: yesterday, days: 1, maxChars: 220, maxLines: 2 });
+    const fallback = prev ? '' : readRecentDiary(memory, { maxChars: 220, maxLines: 2 });
+    const recent = prev || (history().length ? '' : fallback);
+    return recent ? `（你們昨天聊過：\n${recent}）` : '';
   }
 
   function replyPrompt(name, text) {
