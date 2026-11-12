@@ -1235,6 +1235,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
         const brief = readMemoryBrief(memoryCard);
         log(brief ? `Discord lane：記憶卡已載入（${brief.length} 字）` : `Discord lane：記憶卡讀不到內容（${memoryCard}）`);
       }
+      log(`Discord lane：她的一天——${formatSelfLine(currentActivity(dayPlanFor(new Date()), new Date())) || '（這個點在睡覺）'}`);
       try {
         const baseUrl = await resolveBaseUrl();
         ensureApi(baseUrl);
