@@ -14,6 +14,24 @@
 
 ## 待发布
 
+## 2026-11-13 04:45 — 她有自己的「此刻」（日程與自我狀態注入）
+
+- 覆蓋提交：`（本批提交）`
+- 文件：`src/lane-day.js`（新）、`src/discord-lane.js`（`dayPlanFor()`/`selfLine()`，`replyPrompt()` 與 `proactivePrompt()` 各插一行）、`scripts/test-lane-day.mjs`（新）、`scripts/test-audit.mjs`
+- case：[`docs/cases/2026-11-13-lane-day.md`](cases/2026-11-13-lane-day.md)
+- 建議版本：**0.9.1 patch**
+- 影響面：只多一段提示（每輪 30–40 字），不影響工具與發送；要關掉把 `selfLine()` 那兩行註解即可。
+- 回滾：`git revert <本批提交>`。
+
+**交接塊**
+
+```
+[surfcore] 她現在有「此刻」：知道自己幾點在做什麼
+- 新 src/lane-day.js：日期當種子排一天的作息（晚上精神、白天會困），每段排兩件事，前半後半會換
+- replyPrompt()/proactivePrompt() 各插一行「（你現在在湖邊：…）」；睡著改成「被訊息叫醒」
+- 測試：test-lane-day 6 組、test-discord-lane 18 組、test-audit 151/151
+```
+
 ## 2026-11-13 04:40 — 讓她有聲音（離線 SAPI + 語音附件）
 
 - 覆蓋提交：`（本批提交）`

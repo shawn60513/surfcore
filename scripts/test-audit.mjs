@@ -289,6 +289,7 @@ const tests = [
   'test-mcp-discord.mjs',
   'test-tts.mjs',
   'test-discord-lane.mjs',
+  'test-lane-day.mjs',
   'test-lane-memory.mjs',
   // B站 @ 提醒：首轮只记水位、新条目只提醒一次、lane 送不出去不吞。
   'test-bili-inbox.mjs',

@@ -29,6 +29,7 @@ import {
 } from './discord-core.js';
 import { readPersonaLayerText } from './character-persona.js';
 import { pickSpeakLine, shouldSpeak, synthesizeWav } from './tts.js';
+import { buildDayPlan, currentActivity, formatSelfLine } from './lane-day.js';
 import { discoverDshBaseUrl, isLoopbackBaseUrl, probeDshBaseUrl } from './dsh-port.js';
 
 const LANE_VERSION = 1;
@@ -895,6 +896,20 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     return formatTasteLine(readTaste());
   }
 
+  // 她自己的一天：同一天排一次，之後只依現在時間算「此刻在干嘛」。
+  let dayCache = { key: '', plan: null };
+  function dayPlanFor(now) {
+    const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+    if (dayCache.key !== key || !dayCache.plan) dayCache = { key, plan: buildDayPlan(now) };
+    return dayCache.plan;
+  }
+  /** 一行人話：拿來讓她在聊天裡順口講「我剛在…」。睡著時講「被吵醒」。 */
+  function selfLine(now = new Date()) {
+    const activity = currentActivity(dayPlanFor(now), now);
+    if (activity.phase === 'sleep') return '（你本來在睡覺，被訊息叫醒的）';
+    return formatSelfLine(activity);
+  }
+
   function replyPrompt(name, text) {
     const log2 = history()
       .map((m) => `${m.role === 'user' ? '對方' : '你'}：${m.content}`)
@@ -911,6 +926,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
       `${timeLine(new Date(), lastAt)}（私訊）`,
       remember ? `你記得：${remember}` : '',
       selfBusy ? `（你最近在忙：${selfBusy}）` : '',
+      selfLine(),
       hasLink(text) ? LINK_HINT : '',
       tasteHint(text),
       log2 ? `（你們聊過的）\n${log2}` : '',
@@ -953,6 +969,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
       `（${timeLine(new Date(), Number(history().at(-1)?.at ?? 0))}）`,
       loopsHint ? `（話還沒說完的事：${loopsHint}——可以順口問一句，別像在催報告。）` : '',
       loops.self ? `（你最近在忙：${loops.self}）` : '',
+      selfLine(),
       '',
       remember ? `（你記得的事：${remember}）` : '',
       '',
