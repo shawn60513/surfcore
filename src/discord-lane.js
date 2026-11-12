@@ -55,6 +55,33 @@ const STYLE_SAMPLES = [
  * 她要不要主動開口：閒置夠久、距上次主動也夠久、現在不吵、而且她醒著。
  * 抽成純函式是為了可測——四件事任一不成立就不開口。
  */
+/**
+ * 主動開口前看一眼：這句話是不是跟最近講過的太像（同樣的開場/同樣的句子）。
+ * 用字元二元組重疊度判斷，跟記憶卡去重同一個思路，只是門檻高一點。
+ */
+export function looksRepeated(text, recent = [], threshold = 0.7) {
+  const norm = (s) => String(s ?? "").replace(/[^\p{L}\p{N}]/gu, "").toLowerCase();
+  const grams = (s) => {
+    const set = new Set();
+    for (let i = 0; i < s.length - 1; i += 1) set.add(s.slice(i, i + 2));
+    return set;
+  };
+  const mine = norm(text);
+  if (mine.length < 6) return false;
+  const ga = grams(mine);
+  if (!ga.size) return false;
+  for (const other of Array.isArray(recent) ? recent : []) {
+    const their = norm(other);
+    if (!their || their.length < 6) continue;
+    if (mine === their) return true;
+    const gb = grams(their);
+    let hit = 0;
+    for (const g of ga) if (gb.has(g)) hit += 1;
+    if (hit / Math.min(ga.size, gb.size) >= threshold) return true;
+  }
+  return false;
+}
+
 export function mayOpenProactively({ idleOk, freshOk, quietNow, asleep }) {
   return Boolean(idleOk && freshOk && !quietNow && !asleep);
 }
@@ -1154,14 +1181,17 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
           state.lastProactiveAt = now;
           save();
           const text = await runTurn(proactivePrompt());
-          if (!isSkipReply(text)) {
+          const recentMine = history().filter((m) => m.role === 'bot').slice(-5).map((m) => m.content);
+          if (isSkipReply(text)) {
+            log('Discord lane：這次決定不開口');
+          } else if (looksRepeated(text, recentMine)) {
+            log('Discord lane：主動開口又講同一句，這次算了');
+          } else {
             pushHistory('bot', text);
             state.lastBotAt = Date.now();
             save();
             await send(text);
             log(`Discord lane：主動開了口（${currentActivity(dayPlanFor(new Date()), new Date()).label}）`);
-          } else {
-            log('Discord lane：這次決定不開口');
           }
         }
       }

@@ -14,6 +14,25 @@
 
 ## 待发布
 
+## 2026-11-13 04:58 — 長訊息自動拆條 + 主動開口不重複
+
+- 覆蓋提交：`（本批提交）`
+- 文件：`src/discord-core.js`（`splitMessage()`、`sendMessage()` 回 `{id, ids, parts}`）、`src/discord-lane.js`（`looksRepeated()`、主動開口前比對自己最近 5 句）、`scripts/test-discord-split.mjs`（新，6 組）、`scripts/test-discord-lane.mjs`（第 20 組）、`scripts/test-audit.mjs`
+- case：`docs/cases/2026-11-13-lane-long-and-repeat.md`
+- 建議版本：**0.9.1 patch**
+- 影響面：長回覆會變成連續幾條；主動開口偶爾「這次不講」。
+- 回滾：`git revert <本批提交>`。
+
+**交接塊**
+
+```
+[surfcore] 長訊息不再整段丟掉；主動開口不再罐頭
+- splitMessage(): 超過 2000 字按空行/句號/逗號拆，沒標點才硬切，emoji 不會被切半
+- sendMessage(): 逐段送出、回 {id, ids, parts}，引用只掛第一條
+- looksRepeated(): 主動開口前跟自己最近 5 句比，太像就不發（記 log，不算失敗）
+- 測試：test-discord-split 6 組、test-discord-lane 20 組、test-audit 152/152
+```
+
 ## 2026-11-13 04:50 — 記憶卡去重（段落也算）+ 主動開口的四道門
 
 - 覆蓋提交：`（本批提交）`

@@ -284,7 +284,45 @@ export function sanitizeMessageContent(text, maxLength = 2000) {
   return cleaned;
 }
 
-// 文本 / 私聊(1) / 群组私聊(3) / 公告 / 公告子区(10) / 公开子区(11) / 私密子区(12) / 论坛 / 论坛子区(15,16)
+/**
+ * 把長文字切成 Discord 單條上限以內的幾段（盡量斷在空行、換行、句號）。
+ * 只切一刀都捨不得的情況（連續 2000 字沒標點）才硬切；硬切時避開拆壞 emoji。
+ */
+export function splitMessage(text, maxLength = 2000) {
+  const cleaned = String(text ?? '').replace(/\r\n/g, '\n').trim();
+  if (!cleaned) return [];
+  const max = Math.max(1, Math.trunc(maxLength));
+  if (cleaned.length <= max) return [cleaned];
+  const out = [];
+  let rest = cleaned;
+  while (rest.length > max) {
+    const head = rest.slice(0, max);
+    let end = head.lastIndexOf('\n\n');
+    if (end < max * 0.4) end = head.lastIndexOf('\n');
+    if (end < max * 0.4) {
+      end = Math.max(
+        head.lastIndexOf('。'),
+        head.lastIndexOf('！'),
+        head.lastIndexOf('？'),
+        head.lastIndexOf('…'),
+        head.lastIndexOf('，'),
+      );
+    }
+    // 找到標點就把標點留在前一段；什麼都沒有才硬切。
+    if (end >= max * 0.4) end += 1;
+    else end = max;
+    // 硬切別把代理對拆成兩半（emoji 會變亂碼）
+    const code = rest.charCodeAt(end - 1);
+    if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+    if (end <= 0) end = max;
+    out.push(rest.slice(0, end).trim());
+    rest = rest.slice(end).trim();
+  }
+  if (rest) out.push(rest);
+  return out.filter(Boolean);
+}
+
+/** 文本 / 私聊(1) / 群组私聊(3) / 公告 / 公告子区(10) / 公开子区(11) / 私密子区(12) / 论坛 / 论坛子区(15,16) */
 const TEXT_CHANNEL_TYPES = new Set([0, 1, 3, 5, 10, 11, 12, 15, 16]);
 const DM_CHANNEL_TYPES = new Set([1, 3]);
 
@@ -389,31 +427,41 @@ export function createDiscordClient({ token, cfg, fetchImpl, timeoutMs, sleep, n
       }
       await requireAllowedChannel(channelId);
       // 只有附件、没有文字也可以发（語音就是這樣）。
-      const text = file
-        ? String(content ?? '').slice(0, cfg.maxContentLength)
-        : sanitizeMessageContent(content, cfg.maxContentLength);
-      const body = {
-        content: text,
-        // @everyone / @role 永远压制；只有 discord.mentionUsers 白名单里的 ID 会真的 ping 到人。
-        allowed_mentions: allowedMentionsFor(cfg, mentions, Boolean(replyTo)),
-      };
-      if (replyTo) body.message_reference = { message_id: String(replyTo), fail_if_not_exists: false };
-      const sent = file
-        ? await discordUpload({
-          token,
-          route: `/channels/${channelId}/messages`,
-          payload: body,
-          file,
-          fetchImpl,
-          timeoutMs: Math.max(Number(cfg.requestTimeoutMs) || 15000, 30000),
-        })
-        : await request('POST', `/channels/${channelId}/messages`, body);
+      // 純文字超過單條上限時自動拆成幾條——不然 lane 那段會整段送不出去、直接被丟掉。
+      const pieces = file
+        ? [String(content ?? '').slice(0, cfg.maxContentLength)]
+        : splitMessage(content, cfg.maxContentLength).map((piece) => sanitizeMessageContent(piece, cfg.maxContentLength));
+      if (!pieces.length) sanitizeMessageContent(content, cfg.maxContentLength);
+      const ids = [];
+      for (let i = 0; i < pieces.length; i += 1) {
+        const text = pieces[i];
+        const body = {
+          content: text,
+          // @everyone / @role 永远压制；只有 discord.mentionUsers 白名单里的 ID 会真的 ping 到人。
+          allowed_mentions: allowedMentionsFor(cfg, mentions, Boolean(replyTo) && i === 0),
+        };
+        // 引用只掛在第一條上，拆出來的其他段當成後續訊息。
+        if (replyTo && i === 0) body.message_reference = { message_id: String(replyTo), fail_if_not_exists: false };
+        const sent = file
+          ? await discordUpload({
+            token,
+            route: `/channels/${channelId}/messages`,
+            payload: body,
+            file,
+            fetchImpl,
+            timeoutMs: Math.max(Number(cfg.requestTimeoutMs) || 15000, 30000),
+          })
+          : await request('POST', `/channels/${channelId}/messages`, body);
+        ids.push(String(sent?.id ?? ''));
+      }
       return {
         ok: true,
-        id: String(sent?.id ?? ''),
+        id: ids.at(-1) ?? '',
+        ids,
+        parts: ids.length,
         channelId: String(channelId),
         replyTo: replyTo ? String(replyTo) : null,
-        preview: String(sent?.content ?? text).slice(0, 200),
+        preview: String(pieces[0]).slice(0, 200),
       };
     },
 

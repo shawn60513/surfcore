@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively } from '../src/discord-lane.js';
+import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively, looksRepeated } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -244,4 +244,16 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(mayOpenProactively({}), false, '什麼都沒給＝不開口');
 }
 
-console.log('test-discord-lane: 19 组断言通过');
+
+// 20) 主動開口不要每次同一句：跟最近講過的自言自語太像就別發
+{
+  const recent = ['剛在湖邊坐了會兒，風有點涼', '練歌練到一半，卡在那句上不去'];
+  assert.equal(looksRepeated('剛在湖邊坐了會兒，風有點涼', recent), true, '一模一樣當然算重複');
+  assert.equal(looksRepeated('在湖邊坐了會兒，風有點涼吧', recent), true, '換個虛詞也算同一句');
+  assert.equal(looksRepeated('你睡了沒', recent), false, '完全不同的句子可以發');
+  assert.equal(looksRepeated('嗯', recent), false, '太短的不判斷');
+  assert.equal(looksRepeated(null, recent), false);
+  assert.equal(looksRepeated('剛在湖邊坐了會兒，風有點涼', null), false, '沒有歷史就當沒重複');
+}
+
+console.log('test-discord-lane: 20 组断言通过');
