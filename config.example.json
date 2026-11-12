@@ -430,7 +430,7 @@
         "enabled": false,
         "chance": 0.35,
         "maxChars": 60,
-        "rate": 6,
+        "rate": 4,
         "rvc": {
           "enabled": false,
           "python": "state/voice-venv/Scripts/python.exe",
