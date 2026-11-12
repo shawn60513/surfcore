@@ -208,4 +208,17 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(isSkipReply('好啊'), false);
 }
 
-console.log('test-discord-lane: 16 组断言通过');
+// 17) 「記得的事」要帶最新的：卡片往後追加，從頭截斷等於她永遠記不住新的事。
+{
+  const dir = fsx.mkdtempSync(path.join(os.tmpdir(), 'brief-'));
+  const file = path.join(dir, 'card.md');
+  const bullets = Array.from({ length: 10 }, (_, i) => '- 第 ' + (i + 1) + ' 件事：' + '很长的描述'.repeat(6)).join('\n');
+  fsx.writeFileSync(file, ['## 三｜对方是谁', bullets, '## 六｜难忘的时刻', '- 最新那件事：一起看了片子'].join('\n'));
+  const brief = readMemoryBrief(file, 400);
+  assert.ok(brief.includes('最新那件事'), '最新的那条必须还在');
+  assert.ok(!brief.includes('第 1 件事'), '旧的被挤掉才对（长度有限）');
+  assert.ok(brief.length <= 401);
+  fsx.rmSync(dir, { recursive: true, force: true });
+}
+
+console.log('test-discord-lane: 17 组断言通过');

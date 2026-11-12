@@ -392,26 +392,35 @@ const MEMORY_BRIEF_CHAPTERS = new Set(['三', '五', '六']);
  */
 export function readMemoryBrief(file, limit = MEMORY_BRIEF_LIMIT) {
   if (!file) return '';
-  let md = "";
+  let md = '';
   try {
     md = fs.readFileSync(file, 'utf8');
   } catch {
     return '';
   }
-  const parts = [];
-  let take = false;
-  const lines = md.split(String.fromCharCode(10)).map((l) => l.split(String.fromCharCode(13)).join(""));
+  // 每章取「最後 3 條」：卡片是往後追加的，越下面越新，
+  // 從頭截斷等於她永遠只記得最早那幾條，新的事一條都進來不了。
+  const perChapter = new Map();
+  let cur = '';
+  const lines = md.split(String.fromCharCode(10)).map((l) => l.split(String.fromCharCode(13)).join(''));
   for (const line of lines) {
     const num = chapterNumber(line);
     if (num) {
-      take = MEMORY_BRIEF_CHAPTERS.has(num);
+      cur = MEMORY_BRIEF_CHAPTERS.has(num) ? num : '';
       continue;
     }
-    if (!take) continue;
-    const t = stripBullet(line);
-    if (t) parts.push(t);
+    if (!cur) continue;
+    const t = stripBullet(line).replace(/[。；;]+$/u, '');
+    if (t) perChapter.set(cur, [...(perChapter.get(cur) ?? []), t]);
   }
-  const text = parts.join('；');
+  const picked = [];
+  for (const ch of ['三', '五', '六']) {
+    const list = perChapter.get(ch) ?? [];
+    picked.push(...list.slice(-3));
+  }
+  // 超長就從最舊的開始丟，保住最新的那幾條。
+  while (picked.length > 1 && picked.join('；').length > limit) picked.shift();
+  const text = picked.join('；');
   if (!text) return '';
   return text.length > limit ? text.slice(0, limit) + '…' : text;
 }

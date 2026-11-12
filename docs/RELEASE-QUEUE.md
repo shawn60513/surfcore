@@ -17,6 +17,21 @@
 > **2026-11-03 04:05：v0.8.7 已发布**，覆盖本表截至该时间的全部待发布批次（0.8.6 以来全部 dev，74 commits）。
 > 以下批次保留作追溯；后续新批次继续加在最上面。
 
+### 批次 2026-11-13 04:05 — 記憶卡回填 + 摘要取最新
+
+**类型**：patch
+
+**范围**
+- src/discord-lane.js：readMemoryBrief() 改为每章取最后 3 条、超长从最旧丢，保住最新；顺手清掉条目末尾标点。
+- scripts/test-discord-lane.mjs：第 17 组（最新条目必须在、旧的被挤掉）。
+- config.json（gitignore）：discord.lane.consolidateHour -1 → 23（恢复每晚整理）。
+- 数据（不在 repo）：记忆卡回填 11-07~11-10 四条，备份 记忆卡.md.bak-20261113-0358-03。
+- docs/cases/2026-11-13-memory-backfill.md + README 首行。
+
+**验证**：test-discord-lane 17 组；test-audit 149/149；brief 483 字含新条目。
+
+**回滚**：consolidateHour 改回 -1；readMemoryBrief 恢复从头截断（不建议）；记忆卡用备份还原。
+
 ### 批次 2026-11-10 19:05 — 「跳過」不再漏出
 
 **类型**：patch
