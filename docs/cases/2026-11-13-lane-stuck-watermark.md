@@ -41,3 +41,13 @@ if (state.lastMessageId) query.set('after', state.lastMessageId);
 
 - 影響：所有「積壓超過一頁」的情況（測試訊息多、離線一晚、DSH 重啟後補抓）都會中，不只這次。
 - 遺留：`config.json` 的 `dsh.baseUrl` 仍會被 DSH 重啟打回舊值——現在靠 lane 自己的探測 + 看門狗重啟時帶 `DSH_WEB_URL`；兩者都失效時還是得手動改。
+
+## 補記（08:12）：DSH 換端口後自己接回來
+
+上面第 1 層根因（端口過期）補了兩件事，不用再手動改 `config.json`：
+
+- `refreshApi()`：`resolveBaseUrl()` 重新探測，換了就丟掉快取的 API client、記一行「DSH 位址換了，改用 …」。
+- `runTurn()` 送 prompt 時若遇到網路類錯誤（`fetch failed` / `ECONNREFUSED` / socket hang up…），先 `refreshApi()` 再重試一次，日誌「prompt 連不上（…），重新找 DSH 位址」。非網路錯誤（例如 prompt 被拒）不重試，照舊拋出。
+
+驗證：`node --check` + `test-discord-lane` 22 組；重啟後 08:11:44 正常起步。
+

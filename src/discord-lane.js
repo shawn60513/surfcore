@@ -856,6 +856,26 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     }
     return base;
   }
+  /** DSH 重啟後端口會換：連不上就重新探測一次，換掉快取的 client。 */
+  async function refreshApi() {
+    const fresh = await resolveBaseUrl();
+    if (fresh && fresh !== cfg.dsh?.baseUrl) {
+      cfg.dsh = { ...(cfg.dsh ?? {}), baseUrl: fresh };
+      api = null;
+      ensureApi(fresh);
+      log(`Discord lane：DSH 位址換了，改用 ${fresh}`);
+    } else if (!api) {
+      ensureApi(fresh || cfg.dsh?.baseUrl);
+    }
+    return fresh;
+  }
+
+  function isNetworkError(error) {
+    return /fetch failed|ECONNREFUSED|ECONNRESET|ENOTFOUND|EHOSTUNREACH|socket hang up|network/i.test(
+      String(error?.message ?? error ?? '')
+    );
+  }
+
   function ensureApi(baseUrl) {
     if (!api) {
       api = new NodeApiClient(baseUrl, undefined, {
@@ -1049,18 +1069,32 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     promise.catch(() => {});
     waiting = mine;
     collector = null;
-    const accepted = await withTimeout(
-      api.sessions.prompt({
-        sessionId,
-        mode: 'queue',
-        content: [{ type: 'text', text: promptText }, ...extraParts],
-      }),
-      30_000,
-      'prompt 沒回應'
-    ).catch((error) => {
-      if (waiting === mine) waiting = null;
-      throw error;
-    });
+    const sendPrompt = () =>
+      withTimeout(
+        api.sessions.prompt({
+          sessionId,
+          mode: 'queue',
+          content: [{ type: 'text', text: promptText }, ...extraParts],
+        }),
+        30_000,
+        'prompt 沒回應'
+      );
+    let accepted;
+    try {
+      accepted = await sendPrompt();
+    } catch (error) {
+      // DSH 重啟／換端口時，這裡會是 fetch failed。重新探測一次再試，別讓訊息就此卡住。
+      if (!isNetworkError(error)) {
+        if (waiting === mine) waiting = null;
+        throw error;
+      }
+      log(`Discord lane：prompt 連不上（${error?.message ?? error}），重新找 DSH 位址`);
+      await refreshApi();
+      accepted = await sendPrompt().catch((retryError) => {
+        if (waiting === mine) waiting = null;
+        throw retryError;
+      });
+    }
     if (!accepted?.result?.ok) {
       if (waiting === mine) waiting = null;
       throw new Error(`prompt 被拒：${accepted?.result?.error?.code ?? ''}`);
