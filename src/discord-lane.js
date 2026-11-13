@@ -147,6 +147,19 @@ function clampMs(value, fallback, min, max) {
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Math.trunc(ms))));
 
+// DSH 那邊的 HTTP 呼叫沒有內建逾時。一旦卡住，tick 會永遠停在原地，連輪詢都不會再跑
+// （表現：進程活著、3100 在聽、但你發什麼都沒反應）。所以每個「等 DSH」的呼叫都要有上限。
+function withTimeout(promise, ms, label) {
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label}（${Math.round(ms / 1000)} 秒）`)), ms);
+    timer.unref?.();
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 const WEEKDAYS = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
 
 /**
@@ -276,6 +289,28 @@ function splitContent(text, max = 1900) {
 }
 
 /** Discord 的 snowflake id 是 19 位，超過 Number 的安全整數；只比大小可以用 BigInt。 */
+/**
+ * 把 Discord 訊息抓到底。
+ *
+ * 這裡踩過兩個坑，合起來的表現是「她忽然不理人」：
+ *   1. 只抓一頁（limit 20）而 after 是由舊往新排，積壓超過一頁時新訊息永遠抓不到；
+ *   2. 在抓取層就把 bot 自己的訊息濾掉，於是 tick 沒機會推水位，永遠卡在同一頁。
+ * 現在：分頁抓到不足一頁為止（上限 maxPages 防呆），bot 的訊息留給 tick 去推水位。
+ */
+export async function fetchPages({ fetchPage, startCursor = '', pageSize = 100, maxPages = 5 }) {
+  const collected = [];
+  let cursor = startCursor;
+  for (let page = 0; page < maxPages; page += 1) {
+    const list = await fetchPage(cursor);
+    if (!Array.isArray(list) || !list.length) break;
+    collected.push(...list);
+    const lastId = list.at(-1)?.id ?? '';
+    if (list.length < pageSize || !lastId || lastId === cursor) break;
+    cursor = lastId;
+  }
+  return collected;
+}
+
 export function compareIds(a, b) {
   const left = String(a?.id ?? '');
   const right = String(b?.id ?? '');
@@ -587,17 +622,19 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
 
   async function fetchNew() {
     const channelId = await ensureDm();
-    const query = new URLSearchParams({ limit: '20' });
-    if (state.lastMessageId) query.set('after', state.lastMessageId);
-    const raw = await discordRequest({ token, route: `/channels/${channelId}/messages?${query}` });
-    const list = Array.isArray(raw) ? raw : [];
-    const messages = list
-      .map((m) => normalizeMessage(m))
-      .filter((m) => m && m.authorId)
-      // 自己的訊息不能當成他說的：以前這裡只有一個空 Set，靠後面再擋一次。
-      .filter((m) => !state.botId || m.authorId !== state.botId)
-      .sort(compareIds);
-    return { channelId, messages };
+    const messages = await fetchPages({
+      startCursor: state.lastMessageId || '',
+      fetchPage: async (cursor) => {
+        const query = new URLSearchParams({ limit: '100' });
+        if (cursor) query.set('after', cursor);
+        const raw = await discordRequest({ token, route: `/channels/${channelId}/messages?${query}` });
+        return (Array.isArray(raw) ? raw : [])
+          .map((m) => normalizeMessage(m))
+          .filter((m) => m && m.authorId)
+          .sort(compareIds);
+      },
+    });
+    return { channelId, messages: messages.sort(compareIds) };
   }
 
   // 把 DSH 那邊開的一輪同步到 Discord（同一段文字 2 分鐘內不重送）
@@ -851,7 +888,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     }
     if (state.sessionId && state.workspaceId) {
       try {
-        await api.sessions.list({});
+        await withTimeout(api.sessions.list({}), 20_000, 'sessions.list 沒回應');
         api.events.follow(state.sessionId);
         return state.sessionId;
       } catch {}
@@ -1012,10 +1049,17 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     promise.catch(() => {});
     waiting = mine;
     collector = null;
-    const accepted = await api.sessions.prompt({
-      sessionId,
-      mode: 'queue',
-      content: [{ type: 'text', text: promptText }, ...extraParts],
+    const accepted = await withTimeout(
+      api.sessions.prompt({
+        sessionId,
+        mode: 'queue',
+        content: [{ type: 'text', text: promptText }, ...extraParts],
+      }),
+      30_000,
+      'prompt 沒回應'
+    ).catch((error) => {
+      if (waiting === mine) waiting = null;
+      throw error;
     });
     if (!accepted?.result?.ok) {
       if (waiting === mine) waiting = null;
@@ -1211,16 +1255,25 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
 
   // ── 主循環 ──────────────────────────────────────────────────────────────
 
+  const TRACE = process.env.LANE_TRACE === '1';
+  const trace = (msg) => {
+    if (TRACE) log(`Discord lane trace：${msg}`);
+  };
+
   async function tick() {
     // 每轮再钉一次：插件在「继承记忆」或复制记忆时会把这个会话重新打开
     const pinned = pinFishMemoryOff(FISH_MEMORY_CONFIG(), state.sessionId);
     if (pinned.changed) log('Discord lane：魚の記憶又被打開了，已再關掉');
     if (working) return;
     working = true;
+    const hangAlarm = setTimeout(() => log('Discord lane：這一輪已經跑了 3 分鐘還沒完（DSH 那邊可能卡住）'), 180_000);
+    hangAlarm.unref?.();
     try {
+      trace('fetchNew 開始');
       const firstRun = !state.lastMessageId;
       const startedAt = Number(state.startedAt ?? 0);
       const { messages: fetched } = await fetchNew();
+      trace(`fetchNew 回來，${fetched.length} 條`);
 
       // 第一次跑：本進程啟動之前的歷史訊息只當水位，不回覆。
       if (firstRun) {
@@ -1261,6 +1314,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
       }
 
       if (incoming.length) {
+        log(`Discord lane：收到 ${incoming.length} 條，開始跑一輪`);
         const last = incoming.at(-1);
         const lines = [];
         const imageParts = [];
@@ -1283,6 +1337,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
           const note = notes.join(String.fromCharCode(10));
           const promptText = note ? basePrompt + String.fromCharCode(10) + note : basePrompt;
           let reply;
+          trace('runTurn 開始');
           try {
             reply = await runTurn(promptText, imageParts);
           } catch (error) {
@@ -1291,6 +1346,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
             log(`Discord lane：帶圖那輪沒過（${error?.message ?? error}），退回純文字重試`);
             reply = await runTurn(promptText);
           }
+          trace('runTurn 回來');
           for (const line of lines) pushHistory('user', line);
           pushHistory('bot', reply);
           state.lastUserAt = Date.now();
@@ -1338,6 +1394,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     } catch (error) {
       log(`Discord lane tick 失敗：${error?.message ?? error}`);
     } finally {
+      clearTimeout(hangAlarm);
       working = false;
     }
   }
@@ -1450,9 +1507,12 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
           .then(() => log('Discord lane：換聲工人已預熱（第一句語音不用等模型載入）'))
           .catch((error) => log(`Discord lane：換聲工人預熱失敗（${error?.message ?? error}），要用的時候再冷啟`));
       }
-      await tick();
-      if (once) return;
+      if (once) {
+        await tick();
+        return;
+      }
       setInterval(() => { tick(); }, pollMs);
+      tick().catch((error) => log(`Discord lane 首輪失敗：${error?.message ?? error}`));
     },
     tick,
     send,

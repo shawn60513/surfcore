@@ -12,6 +12,15 @@
 
 ---
 
+## 待發布 · 2026-11-13 08:10 · 她忽然不理人（抓訊息只抓一頁、水位卡死）
+
+- **覆蓋提交**：本批次
+- **修了什麼**：`src/discord-lane.js` 的 `fetchNew()` 改走新的純函式 `fetchPages({ fetchPage, startCursor, pageSize = 100, maxPages = 5 })`——分頁抓到不足一頁為止，**不再在抓取層過濾 bot 自己的訊息**（那會讓 tick 推不動水位）。`limit` 20 → 100。
+- **順手補的**：`withTimeout()` 包 `api.sessions.prompt`（30s）與 `api.sessions.list`（20s）；`start()` 先 `setInterval` 再跑第一輪；tick 加 3 分鐘 `hangAlarm` 與「收到 N 條」日誌；`LANE_TRACE=1` 可開逐步追蹤。
+- **案例**：[`docs/cases/2026-11-13-lane-stuck-watermark.md`](cases/2026-11-13-lane-stuck-watermark.md)
+- **建議版本**：0.9.1（patch）
+- **回滾**：`git revert` 本批次即可（修的是抓取邏輯，不涉及資料格式）。
+
 ## 待發布 · 2026-11-13 07:25 · 她會發表情包了（Discord 附件通道）
 
 - **覆蓋提交**：本批次

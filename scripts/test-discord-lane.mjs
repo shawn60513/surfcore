@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively, looksRepeated, openChanceHit } from '../src/discord-lane.js';
+import { createTurnAttributor, fetchPages, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively, looksRepeated, openChanceHit } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -267,4 +267,38 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(openChanceHit('0.3', 0.29), true, '字串也吃得下');
 }
 
-console.log('test-discord-lane: 21 组断言通过');
+
+// 22) 積壓超過一頁時要抓到底，而且 bot 自己的訊息不能把水位卡住
+//     （2026-11-13「DC 傳訊息沒反應」：20 條自己的測試訊息把水位堵死，新訊息永遠抓不到）
+{
+  const page = (from, count) => Array.from({ length: count }, (_, i) => ({ id: String(from + i) }));
+  const pages = [page(100, 100), page(200, 100), page(300, 28)];
+  const seen = [];
+  const got = await fetchPages({
+    startCursor: '99',
+    fetchPage: async (cursor) => {
+      seen.push(cursor);
+      const idx = seen.length - 1;
+      return idx < pages.length ? pages[idx] : [];
+    },
+  });
+  assert.equal(got.length, 228, '三頁都要收進來');
+  assert.deepEqual(seen, ['99', '199', '299'], '游標要一路往後推');
+  assert.equal(got.at(-1).id, '327', '最新的那條一定要拿到');
+
+  const short = [];
+  const one = await fetchPages({ startCursor: '', fetchPage: async () => (short.push(1), [{ id: '5' }]) });
+  assert.equal(one.length, 1, '不足一頁就停');
+  assert.equal(short.length, 1, '不該再多問一次');
+
+  let calls = 0;
+  const capped = await fetchPages({
+    startCursor: '',
+    maxPages: 2,
+    fetchPage: async () => (calls += 1, page(calls * 100, 100)),
+  });
+  assert.equal(capped.length, 200, 'maxPages 是防呆上限');
+  assert.equal(calls, 2);
+}
+
+console.log('test-discord-lane: 22 组断言通过');
