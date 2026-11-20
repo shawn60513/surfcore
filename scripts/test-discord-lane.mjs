@@ -327,10 +327,10 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.ok(prompt.includes('不要解釋'), '不要解釋');
   assert.ok(prompt.includes('我記下了，你說的這個我會注意。'), '原文要帶上');
   assert.ok(!prompt.includes('最近的對話'), '不要帶上下文');
-  assert.ok(prompt.includes('最多 12 個字'), '要壓到 12 字以內（圖靈測試：長句最好認）');
+  assert.ok(prompt.includes('最多 30 個字'), '上限 30 字（太短會聽不懂）');
   assert.ok(prompt.includes('不要畫風景、不要用比喻'), '要禁止寫景比喻');
   assert.ok(prompt.includes('不要複述他剛說的話'), '要禁止複述對方');
-  assert.ok(prompt.includes('半句話沒關係'), '要允許半句');
+  assert.ok(prompt.includes('那句話自己站得住'), '砍的時候要留得住意思');
   assert.ok(prompt.includes('不要靠語氣詞湊字數'), '不要用語氣詞湊長度');
   assert.ok(buildPolishPrompt(null).includes('改寫'), '空字也給得出提示詞');
 
@@ -345,10 +345,13 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   const reactPrompt = buildPolishPrompt('嗯嗯你好', 'react');
   assert.ok(reactPrompt.includes('她是在反應，不是在報告'), '反應版要講清楚是反應');
   assert.ok(reactPrompt.includes('不要報告她剛做了什麼'), '反應版不要報告');
-  assert.ok(reactPrompt.includes('最多 12 個字'), '反應版也要短');
-  assert.ok(buildPolishPrompt('嗯嗯你好').includes('超過就砍掉一半'), '預設仍是修剪版');
+  assert.ok(reactPrompt.includes('15–30 個字'), '反應版也要有自己的長度上限');
+  assert.ok(reactPrompt.includes('要接得上他那句話'), '反應版不能牛頭不對馬嘴');
+  assert.ok(buildPolishPrompt('嗯嗯你好').includes('最多 30 個字'), '預設仍是修剪版');
   assert.equal(pickPolishMode(''), 'trim', '沒有他的原話時保守走修剪（不要把資訊砍掉）');
   assert.equal(pickPolishMode('在嗎'), 'react', '閒聊走反應');
+  assert.equal(pickPolishMode('你今天有什麼計劃嗎'), 'trim', '他在問事情，要走修剪（反應版會答得聽不懂）');
+  assert.equal(pickPolishMode('這也太久了吧，我從早上等到現在都沒人理我'), 'trim', '他講了一整段，要走修剪');
   assert.equal(pickPolishMode('今天好累'), 'react', '抱怨也還是反應');
   assert.equal(pickPolishMode('這個影片你覺得怎麼樣'), 'trim', '問內容走修剪');
   assert.equal(pickPolishMode('https://youtu.be/abc'), 'trim', '貼連結走修剪（要能講細節）');

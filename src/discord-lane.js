@@ -68,7 +68,7 @@ export function buildPolishPrompt(text, mode = 'trim') {
         '（最要緊的是：她是在反應，不是在報告。）',
         '（不要報告她剛做了什麼、看到什麼、練了什麼；不要複述或總結對方的話；不要抽象感慨；不要寫景、不要比喻。）',
         '（只留一個反應：一個情緒、一個吐槽、一個問回去、或一句具體到某個東西的話（哪一首、哪個數字、哪一下）。）',
-        '（最多 12 個字。可以不完整、可以只有兩三個字。）',
+        '（大概 15–30 個字就好，最多兩句；短也有短的，但別短到聽不懂。要接得上他那句話——不要他說東你答西，也不要假設他知道你剛才在幹嘛。）',
         '（她的腔調：愛彌斯，活潑有點皮、嘴硬心軟；愛用「啦」「嘛」「呢」「噢」「欸」但不必每句都掛。）',
         '（味道參考——不要照抄，只學口氣：）',
         '　　在嗎 → 在～／剛在發呆',
@@ -79,7 +79,7 @@ export function buildPolishPrompt(text, mode = 'trim') {
       ]
     : [
         '（這不是聊天，是校稿：把下面這段話改寫成她在手機上打出來的樣子，只回改寫後的句子。）',
-        '（要點：最多 12 個字。超過就砍掉一半，只留最要緊的那半句——半句話沒關係。）',
+        '（要點：最多 30 個字。超過才砍；砍的時候留住「那句話自己站得住」的部分——誰、什麼事、怎麼了。不要砍成只有你自己懂的半句。）',
         '（不要解釋、不要前言、不要 Markdown、不要括號裡的心理描寫；不要複述他剛說的話，也不要幫他總結。）',
         '（不要畫風景、不要用比喻（「水面靜得像塊玻璃」這種一律刪）。）',
         '（不要靠語氣詞湊字數：啦/嘛/噢/欸 最多留一個，沒有也行；結尾不要句號，認真的那一下才用一次。）',
@@ -102,10 +102,21 @@ export function buildPolishPrompt(text, mode = 'trim') {
  * 那種場合她本來就該說細節。所以先用他的話判斷場合，再由 `polish.mode` 覆寫。
  */
 const WANTS_CONTENT = /(https?:\/\/|講|讲|說|说|介紹|介绍|細節|细节|整理|幫我|帮我|查|怎麼樣|怎么样|為什麼|为什么|教我|怎麼做|怎么做|重點|重点)/;
+// 「只反應不報告」只在真的閒聊時用：他在問事情、在講一段話、或要你辦事，
+// 都用修剪版——反應版會把答案砍成聽不懂的半句。
+const ASKING = /[?？]|嗎|吗|怎麼|怎么|什麼|什么|為什麼|为什么|哪個|哪个|多少|要不要|是不是|可不可以|知不知道/;
+const LONG_ENOUGH = 18;
+// 純打招呼／寒暄：這幾句用反應版最自然（「在～」「剛在發呆」）。
+const GREETING = /^(在嗎|在吗|在不在|在嘛|早|早安|晚安|午安|好久不見|好久不见|哈囉|哈啰|嗨|hi|hello|你睡了嗎|你睡了吗)[呀啊啦喔哦~～!！。.,，?？\s]*$/i;
+
 export function pickPolishMode(userText) {
   const s = String(userText ?? '').trim();
   if (!s) return 'trim';
-  return WANTS_CONTENT.test(s) ? 'trim' : 'react';
+  if (GREETING.test(s)) return 'react';
+  if (WANTS_CONTENT.test(s)) return 'trim';
+  if (ASKING.test(s)) return 'trim';
+  if (s.length >= LONG_ENOUGH) return 'trim';
+  return 'react';
 }
 
 
@@ -333,7 +344,7 @@ export function isSkipReply(text) {
  * 被放過的 11 句平均 10.1 字——「講得長」本身就是最好認的特徵。
  * 所以這裡不只限制「幾條」，也限制「一條多長」。
  */
-export const MAX_BUBBLE_CHARS = 20;
+export const MAX_BUBBLE_CHARS = 40;
 
 // 積壓時不要再「想一下」：他已經連著發了好幾條、或最後一條已經等超過兩分鐘。
 export const DAWDLE_PILEUP_LINES = 2;
@@ -567,7 +578,7 @@ const LANE_WORKSPACE_RULES = [
   "",
   "這個會話只做一件事：跟「上午不順」在 Discord 私訊裡聊天。",
   "像手機打字：短、碎。通常 1–2 條，一條 6–20 個字；不要 Markdown、不要小作文、不要解釋你在做什麼。",
-  "一條別超過 20 個字，最好 12 字以內。想講的塞不下就挑一句講，其餘的留在心裡——長句是最容易被認出「不像人」的地方。",
+  "一條大概 15–30 個字，最多兩句。別寫成小作文，也別短到只剩一個詞——聽不懂就跟沒回一樣。",
   "不要畫風景、不要用比喻；不要複述或總結他剛說的話。",
   "不要每句都完整——「嗯」「哦」「欸」可以單獨一條，也可以半句話就停。",
   "不要每輪都用問句收尾，也不要把兩條的長度弄得一樣整齊。",
@@ -1183,7 +1194,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     const cfgPolish = laneCfg?.polish ?? {};
     if (cfgPolish.enabled !== true) return text;
     const raw = String(text ?? '');
-    if (raw.trim().length < (Number(cfgPolish.minChars) || 6)) return text;
+    if (raw.trim().length < (Number(cfgPolish.minChars) || 14)) return text;
     if (raw.trim().length > (Number(cfgPolish.maxChars) || 600)) return text;
     if (isSkipReply(raw)) return text;
     const mode = ['trim', 'react'].includes(cfgPolish.mode) ? cfgPolish.mode : pickPolishMode(userText);

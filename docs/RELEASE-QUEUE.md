@@ -69,6 +69,14 @@ feat(voice): 她的聲音換成 GPT-SoVITS v4，在 5060 上用 GPU 跑
 
 ## 待发布
 
+## 2026-11-21 07:35 · 把「太短」收回來（建議 0.9.1 patch）
+
+- `MAX_BUBBLE_CHARS` 20 → 40；修剪版上限 12 → 30 字；反應版 15–30 字＋「要接得上他那句話」
+- `pickPolishMode`：打招呼走反應版；問事情／講一整段（≥18 字）走修剪版
+- `polish.minChars` 6 → 14（太短的草稿不磨）
+- 回滾：`discord.lane.polish.enabled=false`（她會恢復成未校稿的原句）
+
+
 ## 2026-11-21 06:35 · 圖靈測試之後：把她講太長的部分砍掉
 
 - commits: 75b2e19

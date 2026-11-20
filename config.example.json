@@ -457,7 +457,7 @@
       "proactiveChance": 0.5,
       "polish": {
         "enabled": false,
-        "minChars": 6,
+        "minChars": 14,
         "maxChars": 600
       }
     },
