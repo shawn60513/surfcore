@@ -54,6 +54,42 @@ const STYLE_SAMPLES = [
   ['你怎麼還不睡', '人家還精神嘛', '……好啦，這就去'],
 ];
 /**
+ * 「語氣重修」的第二道請求：只帶語氣參考、不帶整段上下文。
+ *
+ * 為什麼要這樣做（參考 BV1yYsU63Ejh 講的「大力出奇蹟」）：語氣參考給得夠時，
+ * 模型第一句的合格率最高，越往後越散；所以把已經生成的那句丟回一個乾淨的請求、
+ * 只帶腔調參考，最容易把「魚八股」磨掉，又不會把上下文再洗一遍。
+ */
+export function buildPolishPrompt(text) {
+  const lines = [
+    '（這不是聊天，是校稿：把下面這段話改寫成她在手機上打出來的樣子，只回改寫後的句子。）',
+    '（規則：1–3 句、句子短、結尾不要句號（認真的那一下才用一次）；不要解釋、不要前言、不要 Markdown、不要括號裡的心理描寫。）',
+    '（她的腔調：愛彌斯，粉髮金瞳，活潑有點皮、嘴硬心軟；愛用「啦」「嘛」「呢」「噢」「欸」，句尾偶爾帶「～」但一句最多一個；偶爾自稱「人家」。）',
+    '（味道參考——不要照抄，只學口氣：）',
+    '　　在嗎 → 在～／剛在發呆',
+    '　　今天好累 → 看出來了／你說話都變短了',
+    '　　你怎麼還不睡 → 人家還精神嘛／……好啦，這就去',
+    '下面這句要改寫：',
+    String(text ?? '').trim(),
+  ];
+  return lines.join(String.fromCharCode(10));
+}
+
+/**
+ * 收下重修結果前的三道檢查：空的不收、跟原文一樣不收、長超過兩倍的不收（多半是加了廢話）。
+ */
+export function acceptPolished(original, polished) {
+  const before = String(original ?? '').trim();
+  const after = String(polished ?? '').trim();
+  if (!after) return before;
+  if (!before) return after;
+  if (after === before) return before;
+  if (after.length > Math.max(60, before.length * 2)) return before;
+  if (/^(（|\()?(改寫|润色|潤色|修訂|修訂後|以下是)/.test(after)) return before;
+  return after;
+}
+
+/**
  * 她要不要主動開口：閒置夠久、距上次主動也夠久、現在不吵、而且她醒著。
  * 抽成純函式是為了可測——四件事任一不成立就不開口。
  */
@@ -1037,6 +1073,29 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     return { parts, note: notes.join(String.fromCharCode(10)) };
   }
 
+  /**
+   * 她說完之後再過一道「語氣重修」：多一次短請求（不帶上下文），把句子磨回她的腔調。
+   * 任何一步失敗都退回原句——寧可生硬，也不要發不出去或等她半天。
+   */
+  async function polishReply(text) {
+    const cfgPolish = laneCfg?.polish ?? {};
+    if (cfgPolish.enabled !== true) return text;
+    const raw = String(text ?? '');
+    if (raw.trim().length < (Number(cfgPolish.minChars) || 6)) return text;
+    if (raw.trim().length > (Number(cfgPolish.maxChars) || 600)) return text;
+    if (isSkipReply(raw)) return text;
+    try {
+      const polished = await runTurn(buildPolishPrompt(raw));
+      const kept = stripPromptEcho(polished, '') || polished;
+      const next = acceptPolished(raw, kept);
+      if (next !== raw) log('Discord lane：語氣重修了一道');
+      return next;
+    } catch (error) {
+      log(`Discord lane：語氣重修沒過（${error?.message ?? error}），這句照原樣發`);
+      return text;
+    }
+  }
+
   async function runTurn(promptText, extraParts = []) {
     const sessionId = await ensureSession();
     if (waiting) throw new Error('上一個回合還沒結束');
@@ -1381,6 +1440,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
             reply = await runTurn(promptText);
           }
           trace('runTurn 回來');
+          reply = await polishReply(reply);
           for (const line of lines) pushHistory('user', line);
           pushHistory('bot', reply);
           state.lastUserAt = Date.now();

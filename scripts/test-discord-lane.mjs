@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, fetchPages, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively, looksRepeated, openChanceHit } from '../src/discord-lane.js';
+import { createTurnAttributor, fetchPages, acceptPolished, buildPolishPrompt, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively, looksRepeated, openChanceHit } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -301,4 +301,22 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(calls, 2);
 }
 
-console.log('test-discord-lane: 22 组断言通过');
+
+// 23) 語氣重修：提示詞要乾淨、驗收要保守（寧可原封不動，也不要發一段廢話）
+{
+  const prompt = buildPolishPrompt('我記下了，你說的這個我會注意。');
+  assert.ok(prompt.includes('只回改寫後的句子'), '要講清楚只回句子');
+  assert.ok(prompt.includes('不要解釋'), '不要解釋');
+  assert.ok(prompt.includes('我記下了，你說的這個我會注意。'), '原文要帶上');
+  assert.ok(!prompt.includes('最近的對話'), '不要帶上下文');
+  assert.ok(buildPolishPrompt(null).includes('改寫'), '空字也給得出提示詞');
+
+  assert.equal(acceptPolished('原文', ''), '原文', '空結果退回原文');
+  assert.equal(acceptPolished('原文', '原文'), '原文', '一樣的不收');
+  assert.equal(acceptPolished('短句', '短句'.repeat(80)), '短句', '長超過兩倍的不收（多半加了廢話）');
+  assert.equal(acceptPolished('原文', '以下是改寫：嗯'), '原文', '帶前言的不收');
+  assert.equal(acceptPolished('我記下了，你說的這個我會注意。', '記下啦'), '記下啦', '正常的就換掉');
+  assert.equal(acceptPolished('', '你好'), '你好', '原文空就用結果');
+}
+
+console.log('test-discord-lane: 23 组断言通过');

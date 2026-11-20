@@ -6,6 +6,7 @@
 
 | 日期 | 案例 | 一句話 | 版本 |
 | --- | --- | --- | --- |
+| 2026-11-21 | [語氣重修：把「魚八股」再磨一道](2026-11-21-lane-polish.md) | 影片 BV1yYsU63Ejh 的「大力出奇蹟」：每句用乾淨請求（只帶腔調參考）重寫一次；`buildPolishPrompt` + `acceptPolished` 保守驗收 | 0.9.1 |
 | 2026-11-13 | [她忽然不理人：水位被自己的訊息堵死](2026-11-13-lane-stuck-watermark.md) | 抓訊息只抓一頁（after 由舊往新）又把 bot 訊息濾掉，tick 推不動水位；改成分頁抓到不足一頁、bot 訊息交給 tick | 0.9.1 |
 | 2026-11-13 | [她會發表情包了：Discord 附件通道](2026-11-13-lane-meme-upload.md) | bot 有 ATTACH_FILES 但 MCP 沒接出來；新增 loadAttachment（絕對路徑＋目錄白名單＋≤8MB），`send_meme` 拿到 path 就能發圖 | 0.9.1 |
 | 2026-11-13 | [她的聲音（四）：GPT-SoVITS v4 走 GPU](2026-11-13-lane-gsv-voice.md) | 原生中文 TTS 在 CPU 要 21 倍實時，換 cu128 後 1.1 倍；常駐工人每句 4.3–4.5 秒 | 0.9.1 |

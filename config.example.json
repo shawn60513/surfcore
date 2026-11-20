@@ -454,7 +454,12 @@
           "timeoutMs": 180000
         }
       },
-      "proactiveChance": 0.5
+      "proactiveChance": 0.5,
+      "polish": {
+        "enabled": false,
+        "minChars": 6,
+        "maxChars": 600
+      }
     },
     "mentionUsers": [],
     "pingOnReply": true,

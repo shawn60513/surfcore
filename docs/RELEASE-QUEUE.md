@@ -12,6 +12,16 @@
 
 ---
 
+## 待發布 · 2026-11-21 05:55 · 語氣重修（把「魚八股」再磨一道）
+
+- **覆蓋提交**：本批次
+- **來源**：B站 [BV1yYsU63Ejh](https://www.bilibili.com/video/BV1yYsU63Ejh/) 的「大力出奇蹟」——語氣參考給足時第一句最像人，越往後越散，所以把生成好的那句丟回乾淨請求重寫一次。
+- **改了什麼**：`src/discord-lane.js` 新增導出 `buildPolishPrompt(text)`（不帶 history 的校稿請求）與 `acceptPolished(original, polished)`（空／相同／超兩倍／帶前言一律退回原句）；工廠內 `polishReply()` 接在 `tick()` 的 `runTurn` 之後、`pushHistory` 之前，失敗只記 log 不影響發送。
+- **設定**：`discord.lane.polish = { enabled: true, minChars: 6, maxChars: 600 }`（example 預設 false）。
+- **案例**：[`docs/cases/2026-11-21-lane-polish.md`](cases/2026-11-21-lane-polish.md)
+- **建議版本**：0.9.1（patch）
+- **回滾**：`discord.lane.polish.enabled = false`（立即生效，需重啟 bridge）。
+
 ## 待發布 · 2026-11-13 08:10 · 她忽然不理人（抓訊息只抓一頁、水位卡死）
 
 - **覆蓋提交**：本批次
