@@ -64,6 +64,9 @@ export function buildPolishPrompt(text) {
   const lines = [
     '（這不是聊天，是校稿：把下面這段話改寫成她在手機上打出來的樣子，只回改寫後的句子。）',
     '（規則：1–3 句、句子短、結尾不要句號（認真的那一下才用一次）；不要解釋、不要前言、不要 Markdown、不要括號裡的心理描寫。）',
+    '（長度是最要緊的：整段超過 25 字就砍成一句，砍掉的就別補——寧可少說，也不要說滿。）',
+    '（不要畫風景、不要用比喻（「水面靜得像塊玻璃」這種一律刪）；不要複述他剛說的話，也不要幫他總結。）',
+    '（可以不完整：半句話、只接一個詞、甚至只回一個「嗯」都可以；不必每句都成句。）',
     '（她的腔調：愛彌斯，粉髮金瞳，活潑有點皮、嘴硬心軟；愛用「啦」「嘛」「呢」「噢」「欸」，句尾偶爾帶「～」但一句最多一個；偶爾自稱「人家」。）',
     '（味道參考——不要照抄，只學口氣：）',
     '　　在嗎 → 在～／剛在發呆',
@@ -292,17 +295,56 @@ export function isSkipReply(text) {
   return ['跳過', '跳过', 'skip', '不開口', '不开口'].includes(bare);
 }
 
-export function splitBubbles(text, max = 3) {
+/**
+ * 一條氣泡的硬上限。
+ *
+ * 圖靈測試（4 位判官 × 40 句）給的結論很直白：她被認出來的 9 句平均 14.8 字、
+ * 被放過的 11 句平均 10.1 字——「講得長」本身就是最好認的特徵。
+ * 所以這裡不只限制「幾條」，也限制「一條多長」。
+ */
+export const MAX_BUBBLE_CHARS = 40;
+
+/** 把一段太長的話切成 ≤ maxLen 的小塊：先找逗號，找不到就硬切。 */
+export function chunkByLength(text, maxLen = MAX_BUBBLE_CHARS) {
+  const s = String(text ?? '').trim();
+  if (!s) return [];
+  if (s.length <= maxLen) return [s];
+  const out = [];
+  let rest = s;
+  while (rest.length > maxLen) {
+    let cut = -1;
+    for (const ch of ['，', '、', '；', ';', ',', ' ']) {
+      const at = rest.lastIndexOf(ch, maxLen);
+      if (at > maxLen * 0.4) { cut = at + 1; break; }
+    }
+    if (cut < 0) cut = maxLen;
+    out.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) out.push(rest);
+  return out.filter(Boolean);
+}
+
+/**
+ * 分氣泡：先按行、再看句尾標點，最後對每一塊做長度上限。
+ *
+ * 塊數超過 max 時留「開頭幾塊 + 最後一塊」——最後一句通常才是她要講的重點，
+ * 中間那些多半是在解釋（而解釋正是她被判成 AI 的地方）。
+ */
+export function splitBubbles(text, max = 3, maxLen = MAX_BUBBLE_CHARS) {
   const raw = String(text ?? '').trim();
-  if (!raw || max <= 1) return raw ? [raw] : [];
+  if (!raw) return [];
   const rows = raw.split(String.fromCharCode(10)).map((s) => s.trim()).filter(Boolean);
   const units = rows.length > 1
     ? rows
     : raw.split(/(?<=[。！？!?～~…])/).map((s) => s.trim()).filter(Boolean);
-  if (units.length <= 1) return [raw];
-  const out = units.slice(0, max - 1);
-  out.push(units.slice(max - 1).join(''));
-  return out.map((s) => s.trim()).filter(Boolean);
+  const chunks = [];
+  for (const unit of units) chunks.push(...chunkByLength(unit, maxLen));
+  if (!chunks.length) return [];
+  if (max <= 1) return [chunks.join('')];
+  if (chunks.length <= max) return chunks;
+  const head = chunks.slice(0, max - 1);
+  return [...head, chunks[chunks.length - 1]];
 }
 
 /** Discord 單條訊息上限 2000；超長按段落切，避免把一句話斬斷。 */
@@ -477,6 +519,8 @@ const LANE_WORKSPACE_RULES = [
   "",
   "這個會話只做一件事：跟「上午不順」在 Discord 私訊裡聊天。",
   "像手機打字：短、碎。通常 1–2 條，一條 6–20 個字；不要 Markdown、不要小作文、不要解釋你在做什麼。",
+  "一條別超過 40 個字。想講的塞不下就挑一句講，其餘的留在心裡——長句是最容易被認出「不像人」的地方。",
+  "不要畫風景、不要用比喻；不要複述或總結他剛說的話。",
   "不要每句都完整——「嗯」「哦」「欸」可以單獨一條，也可以半句話就停。",
   "不要每輪都用問句收尾，也不要把兩條的長度弄得一樣整齊。",
   "照他的字走：他打繁體，你也用繁體；可以帶「～」「啦」「嘛」「噢」，偶爾自稱「人家」。",

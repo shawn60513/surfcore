@@ -1,4 +1,4 @@
-﻿// Discord lane 回合归属回归：不碰网络、不发 Discord、不读真实配置。
+// Discord lane 回合归属回归：不碰网络、不发 Discord、不读真实配置。
 //
 // 为什么值得一条测试：2026-11-05 那天，同一個 DSH 会话被三处写入
 // （DM lane 轮询 / @addozhang/dsh-discord gateway / dsh-speak-up 念头），
@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, fetchPages, acceptPolished, buildPolishPrompt, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively, looksRepeated, openChanceHit } from '../src/discord-lane.js';
+import { createTurnAttributor, fetchPages, acceptPolished, buildPolishPrompt, chunkByLength, MAX_BUBBLE_CHARS, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively, looksRepeated, openChanceHit } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -138,13 +138,31 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(timeLine(at, 0), '現在是 11 月 6 日 週五 16:20', '没有历史就不提间隔');
 }
 
-// 11) 分氣泡：一段話拆成 2–3 條，像手機聊天；拆不動就原樣一條。
+// 11) 分氣泡：一段話拆成 2–3 條，像手機聊天；一條不超過 40 字（圖靈測試的結論）。
 {
   assert.deepEqual(splitBubbles('好呀。那我先去看了！'), ['好呀。', '那我先去看了！']);
-  assert.deepEqual(splitBubbles('第一句\n第二句\n第三句\n第四句'), ['第一句', '第二句', '第三句第四句'], '最多三條，剩下的併進最後');
+  assert.deepEqual(
+    splitBubbles('第一句\n第二句\n第三句\n第四句'),
+    ['第一句', '第二句', '第四句'],
+    '超過三條時留開頭兩條與最後一條（中間多半是解釋，正是被判成 AI 的地方）',
+  );
   assert.deepEqual(splitBubbles('嗯'), ['嗯'], '只有一句就一條');
   assert.deepEqual(splitBubbles('   '), []);
   assert.deepEqual(splitBubbles(''), []);
+
+  const long = '我剛剛在湖邊坐了半個多小時，風有點涼，水面上一點聲音都沒有，後來還看到一隻白色的鳥飛過去，牠停在對岸那棵枯樹上很久很久才走';
+  const parts = splitBubbles(long);
+  assert.ok(parts.length >= 2, '太長的要拆');
+  assert.ok(parts.every((p) => p.length <= MAX_BUBBLE_CHARS), `每一條都要 <= ${MAX_BUBBLE_CHARS} 字`);
+  assert.deepEqual(chunkByLength('短句'), ['短句'], '沒超長就原樣');
+  assert.deepEqual(
+    chunkByLength('一二三四五六七八九十，一二三四五六七八九十，一二三四五六七八九十', 12),
+    ['一二三四五六七八九十，', '一二三四五六七八九十，', '一二三四五六七八九十'],
+    '優先在逗號處斷',
+  );
+  const hard = chunkByLength('沒' + '半形逗號'.repeat(20), 10);
+  assert.ok(hard.every((p) => p.length <= 10), '沒有標點也要硬切');
+  assert.equal(hard.join(''), '沒' + '半形逗號'.repeat(20), '硬切不掉字');
 }
 
 // 12) 回聲過濾：她把餵進去的提示當成要接的話複述時，發出去前要剪掉。
@@ -309,6 +327,10 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.ok(prompt.includes('不要解釋'), '不要解釋');
   assert.ok(prompt.includes('我記下了，你說的這個我會注意。'), '原文要帶上');
   assert.ok(!prompt.includes('最近的對話'), '不要帶上下文');
+  assert.ok(prompt.includes('超過 25 字就砍成一句'), '要限制長度（圖靈測試：長句最好認）');
+  assert.ok(prompt.includes('不要畫風景、不要用比喻'), '要禁止寫景比喻');
+  assert.ok(prompt.includes('不要複述他剛說的話'), '要禁止複述對方');
+  assert.ok(prompt.includes('可以不完整'), '要允許半句');
   assert.ok(buildPolishPrompt(null).includes('改寫'), '空字也給得出提示詞');
 
   assert.equal(acceptPolished('原文', ''), '原文', '空結果退回原文');
