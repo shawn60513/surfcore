@@ -676,12 +676,15 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
   // 把 DSH 那邊開的一輪同步到 Discord（同一段文字 2 分鐘內不重送）
   function queueMirror(text, promptText = '') {
     text = stripPromptEcho(text, promptText) || text;
-    if (text === lastMirrorSent.text && Date.now() - lastMirrorSent.at < 120000) return;
     mirrorChain = mirrorChain
       .then(async () => {
-        lastMirrorSent = { text, at: Date.now() };
-        pushHistory('bot', text);
-        await send(text);
+        // 同步到 Discord 的那句也磨一道（不然從 DSH 這邊聊，語氣就是沒修的版本）
+        const polished = await polishReply(text).catch(() => '');
+        const finalText = String(polished || '').trim() || text;
+        if (finalText === lastMirrorSent.text && Date.now() - lastMirrorSent.at < 120000) return;
+        lastMirrorSent = { text: finalText, at: Date.now() };
+        pushHistory('bot', finalText);
+        await send(finalText);
         log('Discord lane：DSH 那邊的一輪已同步到 Discord');
       })
       .catch((error) => log(`Discord lane：同步 DSH 的回合失敗：${error?.message ?? error}`));

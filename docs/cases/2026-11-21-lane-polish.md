@@ -42,6 +42,12 @@
 - 23 組全過。
 - 真機：每次重修成功會在 `state/bridge.log` 記一行 `Discord lane：語氣重修了一道`；想知道有沒有生效，跟它聊兩句再搜這行。
 
+## 補記（06:05）：鏡像那條路也要修
+
+原本只有「她回 Discord 訊息」會走 `polishReply()`；如果用户直接在 DSH 這邊跟同一個 lane 會話聊，那句是靠 `queueMirror()` 同步到 Discord 的，走的是另一條路，語氣就沒修過——等於同一个人两个样。
+
+修法：`queueMirror()` 進 `mirrorChain` 之後、`pushHistory`/`send` 之前也過一次 `polishReply()`，失敗就用原文。因為 `polishReply()` 內部是 `runTurn()`，那一輪會被「認輪」標成自己開的（`slot.own = true`），所以重修出來的句子不會再被鏡像一次，不會遞迴。
+
 ## 代價 / 遺留
 
 - 每輪多一次短請求，約多 3–6 秒、多幾百 token（用户已明說不必為 token 妥協）。
