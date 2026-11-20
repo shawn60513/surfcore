@@ -335,6 +335,23 @@ export function isSkipReply(text) {
  */
 export const MAX_BUBBLE_CHARS = 20;
 
+// 積壓時不要再「想一下」：他已經連著發了好幾條、或最後一條已經等超過兩分鐘。
+export const DAWDLE_PILEUP_LINES = 2;
+export const DAWDLE_STALE_MS = 120000;
+
+export function shouldSkipDawdle({
+  lines = 0,
+  lastTimestamp = '',
+  now = Date.now(),
+  pileupLines = DAWDLE_PILEUP_LINES,
+  staleMs = DAWDLE_STALE_MS,
+} = {}) {
+  if (Number(lines) >= pileupLines) return true;
+  const at = Date.parse(String(lastTimestamp ?? ''));
+  if (!Number.isFinite(at)) return false;
+  return Number(now) - at >= staleMs;
+}
+
 /** 把一段太長的話切成 ≤ maxLen 的小塊：先找逗號，找不到就硬切。 */
 export function chunkByLength(text, maxLen = MAX_BUBBLE_CHARS) {
   const s = String(text ?? '').trim();
@@ -766,11 +783,18 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
   }
 
   // 真人不會秒回。偶爾先「想一下」再發：22% 的機會停 20–110 秒，其餘照舊。
+  // 但積壓（他已經等了好幾條／等了幾分鐘）時不要再拖——那不叫靈性，叫沒人理。
   const DAWDLE_CHANCE = 0.22;
   const DAWDLE_MIN_MS = 20000;
   const DAWDLE_MAX_MS = 110000;
 
+  let skipDawdleOnce = false;
+
   async function maybeDawdle() {
+    if (skipDawdleOnce) {
+      skipDawdleOnce = false;
+      return;
+    }
     if (!(Math.random() < DAWDLE_CHANCE)) return;
     const ms = DAWDLE_MIN_MS + Math.floor(Math.random() * (DAWDLE_MAX_MS - DAWDLE_MIN_MS));
     log(`Discord lane：先想一下再回（${Math.round(ms / 1000)} 秒）`);
@@ -1438,7 +1462,10 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     if (pinned.changed) log('Discord lane：魚の記憶又被打開了，已再關掉');
     if (working) return;
     working = true;
-    const hangAlarm = setTimeout(() => log('Discord lane：這一輪已經跑了 3 分鐘還沒完（DSH 那邊可能卡住）'), 180_000);
+    const hangAlarm = setTimeout(
+      () => log('Discord lane：這一輪已經跑了 5 分鐘還沒完（DSH 那邊可能卡住）'),
+      300_000,
+    );
     hangAlarm.unref?.();
     try {
       trace('fetchNew 開始');
@@ -1519,11 +1546,13 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
             reply = await runTurn(promptText);
           }
           trace('runTurn 回來');
-          reply = await polishReply(reply, text);
+          reply = await polishReply(reply, content);
           for (const line of lines) pushHistory('user', line);
           pushHistory('bot', reply);
           state.lastUserAt = Date.now();
           state.lastBotAt = Date.now();
+          skipDawdleOnce = shouldSkipDawdle({ lines: incoming.length, lastTimestamp: last.timestamp });
+          if (skipDawdleOnce) log('Discord lane：他已經等了一會兒，這次不拖');
           const delivered = await send(reply, promptText);
           // 一條都沒送出去＝這則沒送達，保留水位等下一輪重試；送出去一部分就當送達，
           // 否則重試時會把已經看到的那半段再發一次。

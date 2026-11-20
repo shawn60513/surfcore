@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, fetchPages, acceptPolished, buildPolishPrompt, chunkByLength, MAX_BUBBLE_CHARS, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, pickPolishMode, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively, looksRepeated, openChanceHit } from '../src/discord-lane.js';
+import { createTurnAttributor, fetchPages, acceptPolished, buildPolishPrompt, chunkByLength, MAX_BUBBLE_CHARS, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, pickPolishMode, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively, looksRepeated, openChanceHit, shouldSkipDawdle } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -353,6 +353,14 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(pickPolishMode('這個影片你覺得怎麼樣'), 'trim', '問內容走修剪');
   assert.equal(pickPolishMode('https://youtu.be/abc'), 'trim', '貼連結走修剪（要能講細節）');
   assert.equal(pickPolishMode('幫我整理一下'), 'trim', '要幫忙走修剪');
+
+  // 25) 積壓時不要「想一下」：連著兩條、或最後一條等了兩分鐘以上就直接回
+  const now = Date.parse('2026-11-21T06:00:00Z');
+  assert.equal(shouldSkipDawdle({ lines: 0, lastTimestamp: '2026-11-21T05:59:30Z', now }), false, '剛發的一條照常會拖');
+  assert.equal(shouldSkipDawdle({ lines: 2, lastTimestamp: '2026-11-21T05:59:59Z', now }), true, '連兩條就別拖');
+  assert.equal(shouldSkipDawdle({ lines: 1, lastTimestamp: '2026-11-21T05:57:00Z', now }), true, '等超過兩分鐘就別拖');
+  assert.equal(shouldSkipDawdle({ lines: 1, lastTimestamp: '2026-11-21T05:58:30Z', now }), false, '才等一分半，可以慢慢來');
+  assert.equal(shouldSkipDawdle({ lines: 1, lastTimestamp: '', now }), false, '沒有時間戳就照常（保守）');
 }
 
-console.log('test-discord-lane: 24 组断言通过');
+console.log('test-discord-lane: 25 组断言通过');
