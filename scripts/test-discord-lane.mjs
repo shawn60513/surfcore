@@ -327,10 +327,11 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.ok(prompt.includes('不要解釋'), '不要解釋');
   assert.ok(prompt.includes('我記下了，你說的這個我會注意。'), '原文要帶上');
   assert.ok(!prompt.includes('最近的對話'), '不要帶上下文');
-  assert.ok(prompt.includes('超過 25 字就砍成一句'), '要限制長度（圖靈測試：長句最好認）');
+  assert.ok(prompt.includes('最多 12 個字'), '要壓到 12 字以內（圖靈測試：長句最好認）');
   assert.ok(prompt.includes('不要畫風景、不要用比喻'), '要禁止寫景比喻');
   assert.ok(prompt.includes('不要複述他剛說的話'), '要禁止複述對方');
-  assert.ok(prompt.includes('可以不完整'), '要允許半句');
+  assert.ok(prompt.includes('半句話沒關係'), '要允許半句');
+  assert.ok(prompt.includes('不要靠語氣詞湊字數'), '不要用語氣詞湊長度');
   assert.ok(buildPolishPrompt(null).includes('改寫'), '空字也給得出提示詞');
 
   assert.equal(acceptPolished('原文', ''), '原文', '空結果退回原文');
