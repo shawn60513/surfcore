@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fsx from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTurnAttributor, fetchPages, acceptPolished, buildPolishPrompt, chunkByLength, MAX_BUBBLE_CHARS, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively, looksRepeated, openChanceHit } from '../src/discord-lane.js';
+import { createTurnAttributor, fetchPages, acceptPolished, buildPolishPrompt, chunkByLength, MAX_BUBBLE_CHARS, formatTasteLine, isPromptMessage, readMemoryBrief, samePromptText, shouldOfferTaste, splitBubbles, pickPolishMode, stripChatPeriods, stripPromptEcho, timeLine, combineUserLines, isSkipReply, compareIds, mayOpenProactively, looksRepeated, openChanceHit } from '../src/discord-lane.js';
 
 const PROMPT = '對方剛說：碼勒';
 const T0 = 1_000_000; // 送出 prompt 的时刻
@@ -340,6 +340,19 @@ assert.equal(samePromptText('對方剛說：碼勒', '對方剛說：碼呢'), f
   assert.equal(acceptPolished('原文', '以下是改寫：嗯'), '原文', '帶前言的不收');
   assert.equal(acceptPolished('我記下了，你說的這個我會注意。', '記下啦'), '記下啦', '正常的就換掉');
   assert.equal(acceptPolished('', '你好'), '你好', '原文空就用結果');
+
+  // 24) 兩種校稿：閒聊用「只反應」，要內容的場合用「修剪」（別把他的細節砍光）
+  const reactPrompt = buildPolishPrompt('嗯嗯你好', 'react');
+  assert.ok(reactPrompt.includes('她是在反應，不是在報告'), '反應版要講清楚是反應');
+  assert.ok(reactPrompt.includes('不要報告她剛做了什麼'), '反應版不要報告');
+  assert.ok(reactPrompt.includes('最多 12 個字'), '反應版也要短');
+  assert.ok(buildPolishPrompt('嗯嗯你好').includes('超過就砍掉一半'), '預設仍是修剪版');
+  assert.equal(pickPolishMode(''), 'trim', '沒有他的原話時保守走修剪（不要把資訊砍掉）');
+  assert.equal(pickPolishMode('在嗎'), 'react', '閒聊走反應');
+  assert.equal(pickPolishMode('今天好累'), 'react', '抱怨也還是反應');
+  assert.equal(pickPolishMode('這個影片你覺得怎麼樣'), 'trim', '問內容走修剪');
+  assert.equal(pickPolishMode('https://youtu.be/abc'), 'trim', '貼連結走修剪（要能講細節）');
+  assert.equal(pickPolishMode('幫我整理一下'), 'trim', '要幫忙走修剪');
 }
 
-console.log('test-discord-lane: 23 组断言通过');
+console.log('test-discord-lane: 24 组断言通过');

@@ -60,23 +60,54 @@ const STYLE_SAMPLES = [
  * 模型第一句的合格率最高，越往後越散；所以把已經生成的那句丟回一個乾淨的請求、
  * 只帶腔調參考，最容易把「魚八股」磨掉，又不會把上下文再洗一遍。
  */
-export function buildPolishPrompt(text) {
-  const lines = [
-    '（這不是聊天，是校稿：把下面這段話改寫成她在手機上打出來的樣子，只回改寫後的句子。）',
-    '（要點：最多 12 個字。超過就砍掉一半，只留最要緊的那半句——半句話沒關係。）',
-    '（不要解釋、不要前言、不要 Markdown、不要括號裡的心理描寫；不要複述他剛說的話，也不要幫他總結。）',
-    '（不要畫風景、不要用比喻（「水面靜得像塊玻璃」這種一律刪）。）',
-    '（不要靠語氣詞湊字數：啦/嘛/噢/欸 最多留一個，沒有也行；結尾不要句號，認真的那一下才用一次。）',
-    '（她的腔調：愛彌斯，粉髮金瞳，活潑有點皮、嘴硬心軟；愛用「啦」「嘛」「呢」「噢」「欸」，句尾偶爾帶「～」但一句最多一個；偶爾自稱「人家」。）',
-    '（味道參考——不要照抄，只學口氣：）',
-    '　　在嗎 → 在～／剛在發呆',
-    '　　今天好累 → 看出來了／你說話都變短了',
-    '　　你怎麼還不睡 → 人家還精神嘛／……好啦，這就去',
-    '下面這句要改寫：',
-    String(text ?? '').trim(),
-  ];
+export function buildPolishPrompt(text, mode = 'trim') {
+  const react = mode === 'react';
+  const lines = react
+    ? [
+        '（這是校稿。把下面那句改成「她在聊天室裡回一句」的樣子，只回那句話。）',
+        '（最要緊的是：她是在反應，不是在報告。）',
+        '（不要報告她剛做了什麼、看到什麼、練了什麼；不要複述或總結對方的話；不要抽象感慨；不要寫景、不要比喻。）',
+        '（只留一個反應：一個情緒、一個吐槽、一個問回去、或一句具體到某個東西的話（哪一首、哪個數字、哪一下）。）',
+        '（最多 12 個字。可以不完整、可以只有兩三個字。）',
+        '（她的腔調：愛彌斯，活潑有點皮、嘴硬心軟；愛用「啦」「嘛」「呢」「噢」「欸」但不必每句都掛。）',
+        '（味道參考——不要照抄，只學口氣：）',
+        '　　在嗎 → 在～／剛在發呆',
+        '　　今天好累 → 看出來了／你說話都變短了',
+        '　　你怎麼還不睡 → 人家還精神嘛／……好啦，這就去',
+        '下面這句要改寫：',
+        String(text ?? '').trim(),
+      ]
+    : [
+        '（這不是聊天，是校稿：把下面這段話改寫成她在手機上打出來的樣子，只回改寫後的句子。）',
+        '（要點：最多 12 個字。超過就砍掉一半，只留最要緊的那半句——半句話沒關係。）',
+        '（不要解釋、不要前言、不要 Markdown、不要括號裡的心理描寫；不要複述他剛說的話，也不要幫他總結。）',
+        '（不要畫風景、不要用比喻（「水面靜得像塊玻璃」這種一律刪）。）',
+        '（不要靠語氣詞湊字數：啦/嘛/噢/欸 最多留一個，沒有也行；結尾不要句號，認真的那一下才用一次。）',
+        '（她的腔調：愛彌斯，粉髮金瞳，活潑有點皮、嘴硬心軟；愛用「啦」「嘛」「呢」「噢」「欸」，句尾偶爾帶「～」但一句最多一個；偶爾自稱「人家」。）',
+        '（味道參考——不要照抄，只學口氣：）',
+        '　　在嗎 → 在～／剛在發呆',
+        '　　今天好累 → 看出來了／你說話都變短了',
+        '　　你怎麼還不睡 → 人家還精神嘛／……好啦，這就去',
+        '下面這句要改寫：',
+        String(text ?? '').trim(),
+      ];
   return lines.join(String.fromCharCode(10));
 }
+
+/**
+ * 這一句要用哪一種校稿。
+ *
+ * 「只反應不報告」最能去掉機器味（盲測：被認出的比例從 5/6 掉到 1–2/5），
+ * 但遇到他要內容的時候（貼了連結、要你講清楚、要你整理/查東西）就不能砍——
+ * 那種場合她本來就該說細節。所以先用他的話判斷場合，再由 `polish.mode` 覆寫。
+ */
+const WANTS_CONTENT = /(https?:\/\/|講|讲|說|说|介紹|介绍|細節|细节|整理|幫我|帮我|查|怎麼樣|怎么样|為什麼|为什么|教我|怎麼做|怎么做|重點|重点)/;
+export function pickPolishMode(userText) {
+  const s = String(userText ?? '').trim();
+  if (!s) return 'trim';
+  return WANTS_CONTENT.test(s) ? 'trim' : 'react';
+}
+
 
 /**
  * 收下重修結果前的三道檢查：空的不收、跟原文一樣不收、長超過兩倍的不收（多半是加了廢話）。
@@ -723,7 +754,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
     mirrorChain = mirrorChain
       .then(async () => {
         // 同步到 Discord 的那句也磨一道（不然從 DSH 這邊聊，語氣就是沒修的版本）
-        const polished = await polishReply(text).catch(() => '');
+        const polished = await polishReply(text, '').catch(() => '');
         const finalText = String(polished || '').trim() || text;
         if (finalText === lastMirrorSent.text && Date.now() - lastMirrorSent.at < 120000) return;
         lastMirrorSent = { text: finalText, at: Date.now() };
@@ -1124,18 +1155,19 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
    * 她說完之後再過一道「語氣重修」：多一次短請求（不帶上下文），把句子磨回她的腔調。
    * 任何一步失敗都退回原句——寧可生硬，也不要發不出去或等她半天。
    */
-  async function polishReply(text) {
+  async function polishReply(text, userText = '') {
     const cfgPolish = laneCfg?.polish ?? {};
     if (cfgPolish.enabled !== true) return text;
     const raw = String(text ?? '');
     if (raw.trim().length < (Number(cfgPolish.minChars) || 6)) return text;
     if (raw.trim().length > (Number(cfgPolish.maxChars) || 600)) return text;
     if (isSkipReply(raw)) return text;
+    const mode = ['trim', 'react'].includes(cfgPolish.mode) ? cfgPolish.mode : pickPolishMode(userText);
     try {
-      const polished = await runTurn(buildPolishPrompt(raw));
+      const polished = await runTurn(buildPolishPrompt(raw, mode));
       const kept = stripPromptEcho(polished, '') || polished;
       const next = acceptPolished(raw, kept);
-      if (next !== raw) log('Discord lane：語氣重修了一道');
+      if (next !== raw) log(`Discord lane：語氣重修了一道（${mode}）`);
       return next;
     } catch (error) {
       log(`Discord lane：語氣重修沒過（${error?.message ?? error}），這句照原樣發`);
@@ -1487,7 +1519,7 @@ const discordSendMessage = (channelId, payload) => discordClient.sendMessage(cha
             reply = await runTurn(promptText);
           }
           trace('runTurn 回來');
-          reply = await polishReply(reply);
+          reply = await polishReply(reply, text);
           for (const line of lines) pushHistory('user', line);
           pushHistory('bot', reply);
           state.lastUserAt = Date.now();
