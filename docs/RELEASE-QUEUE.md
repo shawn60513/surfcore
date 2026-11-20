@@ -71,7 +71,7 @@ feat(voice): 她的聲音換成 GPT-SoVITS v4，在 5060 上用 GPU 跑
 
 ## 2026-11-21 06:35 · 圖靈測試之後：把她講太長的部分砍掉
 
-- commits: (待回填)
+- commits: 75b2e19
 - 建議版本：0.9.1 patch
 - 覆蓋範圍：src/discord-lane.js（MAX_BUBBLE_CHARS/chunkByLength()/splitBubbles() 上限、uildPolishPrompt() 三條新規則、LANE_WORKSPACE_RULES 兩行）、scripts/test-discord-lane.mjs、case 2026-11-21-lane-turing-fixes.md
 - 回滾：把 splitBubbles() 的 maxLen 傳 null（或改回舊版三行），並刪掉 uildPolishPrompt() 三條規則
